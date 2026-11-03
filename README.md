@@ -1,0 +1,115 @@
+# toro-mcp
+
+TORO Server の AI コネクタ (Remote MCP サーバー) です。Rust 製で、`https://mcp.torosaba.net/` で動きます。
+
+## 役割
+
+| URL | 役割 | ここにあるもの |
+| --- | --- | --- |
+| `https://auth.torosaba.net/` | だれなのかを確かめる | Discord ログイン、トークンの発行、OAuth 2.0 の認可 (TORO-Auth) |
+| `https://api.torosaba.net/` | データを読み書きする | Wiki の原稿、稼働状態、OpenAPI の仕様書 (TORO-API) |
+| `https://mcp.torosaba.net/` | AI クライアントがつなぐ | **このリポジトリ**。ブラウザで開くと Wiki の「AIクライアントの接続方法」へ移動する |
+
+このサービスは画面を持たず、秘密も持ちません。トークンの確認は auth に、Wiki と稼働状態のデータは api に頼みます。
+
+```
+AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬─ toro-auth:8081 (POST /introspect: トークンの確認)
+                                                             └─ toro-api:8080  (Wiki と稼働状態のデータ)
+```
+
+- どのホスト名で受けても、同じ MCP サーバーとして答えます (ホストごとの振り分けはありません)
+- 構成: Cloudflare Tunnel の公開ホスト名 `mcp.torosaba.net` → `http://toro-mcp:8080`
+- `AUTH_INTERNAL_URL` と `API_INTERNAL_URL` の先に、内部のネットワークで届く必要があります。どちらも公開しません
+
+## 窓口
+
+| パス | 答え |
+| --- | --- |
+| `POST /mcp` (どのパスでも可) | JSON-RPC 2.0 (`initialize`、`tools/list`、`tools/call`、`ping` ほか)。通知には 202 |
+| `GET /mcp` | 発見用の JSON (ツールの一覧と、呼び出し元)。`Accept: text/event-stream` なら SSE (最初に `endpoint` のイベントを送り、客が切るまで開けておく) |
+| `GET /` ほか (ブラウザ) | Wiki の「AIクライアントの接続方法」へ 302。`/mcp` と、JSON を求める要求は除く |
+| `DELETE /mcp` | 405 (セッションを持たない) |
+| `/.well-known/oauth-protected-resource[/...]` | RFC 9728 の保護リソースのメタデータ。認可サーバーは auth |
+| `/oauth/*`、`/.well-known/oauth-authorization-server`、`/.well-known/openid-configuration` | auth の同じパスへ 308 |
+| `/favicon.ico`、`/apple-touch-icon.png`、`/icon-{64,192,512}.png` ほか | TORO のアイコン |
+| `GET /healthz` | 稼働確認 |
+
+認証は Bearer だけです。Cookie は見ません。
+
+- トークンなし: 許す (読み取りのツールは使える)
+- 無効・期限切れのトークン: 401 と `WWW-Authenticate` (クライアントが再認可できるように)
+- auth に尋ねられなかったとき: 503。トークンが悪いとは限らないので、401 にして再認可させない
+
+## ツール
+
+コネクタの名前は、どのクライアントでも `TORO Server` です。定義は `assets/mcp/tools.json`。
+
+| ツール | できること | 頼む先 |
+| --- | --- | --- |
+| `wiki_list_pages` | 原稿の一覧 (カテゴリで絞れる) | api `GET /docs/list` |
+| `wiki_get_page` | 原稿と SHA | api `GET /docs/raw` |
+| `wiki_save_page` | 原稿の保存 (コミット)。編集権限と、`write` か `mcp` の scope が要る | api `POST /docs/save` (利用者の Bearer を渡す) |
+| `wiki_search` | 原稿の全文検索 | api `GET /docs/search` |
+| `server_get_status` | Minecraft サーバーの稼働状態 | api `GET /server/status` |
+| `server_get_info` | 公式サービスの URL | 設定から作る |
+| `auth_get_identity` | 呼び出している利用者と権限 | トークンの確認の結果 |
+
+- ツールを足す: `assets/mcp/tools.json` に定義を、`src/mcp/tools/` に実行を書き、`tools/mod.rs` の `call` に 1 行足す
+- パスの正規化と権限の最終判断は api が行う。MCP では、保存の前に「ログイン済みか」「書ける権限か」だけを見る
+
+## 機能ごとの置き場所
+
+| 機能 | ソース | 試験 |
+| --- | --- | --- |
+| 振り分けと共通の上限 | `src/routes.rs` | `tests/hosts.rs`、`tests/security.rs` |
+| MCP の受け口 | `src/mcp/transport.rs` | `tests/mcp.rs` |
+| ツール | `src/mcp/tools/` | `tests/mcp.rs` |
+| 保護リソースのメタデータ | `src/mcp/metadata.rs` | `tests/hosts.rs` |
+| トークンの確認 (auth の `/introspect`) | `src/identity.rs` | `tests/security.rs` |
+| api への問い合わせ | `src/api.rs` | `tests/mcp.rs` |
+| 設定、URL | `src/config.rs`、`src/site.rs` | `tests/hosts.rs` |
+| アイコン | `src/static_files.rs` | `tests/mcp.rs` |
+
+## 開発
+
+```bash
+cargo test
+```
+
+`tests/common/mod.rs` が偽の auth と偽の api を立てるので、試験に秘密やネットワークは要りません。
+
+手元で動かすときは、auth と api を用意するか、`AUTH_INTERNAL_URL` と `API_INTERNAL_URL` に手元の URL を入れて `cargo run` します。
+
+## 設定
+
+`.env.example` を見てください。秘密の値はありません。既定は本番の値です。
+
+| 環境変数 | 既定 | 意味 |
+| --- | --- | --- |
+| `AUTH_INTERNAL_URL` | `http://toro-auth:8081` | トークンの確認を頼む先 |
+| `API_INTERNAL_URL` | `http://toro-api:8080` | Wiki と稼働状態のデータを頼む先 |
+| `PUBLIC_AUTH_URL` / `PUBLIC_API_URL` / `PUBLIC_MCP_URL` / `PUBLIC_WIKI_URL` | 本番の URL | 利用者に見せる URL |
+| `CORS_ORIGINS` | `https://wiki.torosaba.net` | Cookie 付きで呼べる Origin (カンマ区切り) |
+| `PORT` | `8080` | 待ち受けるポート |
+
+**URL の正本は 1 か所です。** 別の場所に書き写さないでください。
+
+- コード: `Config` (`src/config.rs`) だけが URL を持つ
+- プログラム向け: `https://api.torosaba.net/` の JSON
+- 人向け: Wiki の「サービスのURLと役割」のページ
+
+## イメージ
+
+GitHub Actions が、試験に通ったものだけを GHCR (`ghcr.io/toro-server/toro-mcp`) に置きます (linux/amd64)。タグ `v*` を打つとバージョンのタグが付きます。scratch の上で静的に動き、`HEALTHCHECK` はバイナリ自身 (`toro-mcp healthcheck`) が行います。
+
+## セキュリティの考え方
+
+- **JWT を自分では検証しない。** 署名の鍵はこのサービスに無い。トークンの有効性は auth だけが決める
+- **Bearer だけ。** Cookie を見ないので、ブラウザからの CSRF は成り立たない
+- **無効なトークンを匿名として扱わない。** 401 を返して再認可を促す。auth の障害は 503 で、再認可させない
+- **scope を守る。** Wiki の変更には `write` か `mcp` が要る。利用者のトークンは保存のときだけ api に渡す
+- **画像は埋め込む。** `serverInfo.icons` は小さな `data:` URI 1 つだけ (外部の画像を読めないクライアントがある)
+- **応答は `no-store`。** 利用者ごとに違う応答を Cloudflare にためさせない (アイコンだけが例外)
+- 同時に処理する数 (256)、開けておける SSE (128)、ボディの大きさ (2 MiB) に上限がある
+
+試験は `tests/security.rs`。
