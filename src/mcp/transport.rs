@@ -1,12 +1,8 @@
-//! MCP の受け口: つなぎ方の記事への案内、SSE、発見用の JSON、JSON-RPC 2.0
-
-use std::convert::Infallible;
+//! MCP の受け口 (`/`): つなぎ方の記事への案内、発見用の JSON、JSON-RPC 2.0
 
 use axum::http::Method;
 use axum::http::header::{self, HeaderMap, HeaderName, HeaderValue};
-use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{IntoResponse, Response};
-use futures_util::{StreamExt, stream};
+use axum::response::Response;
 use serde_json::{Value, json};
 
 use super::tools;
@@ -41,22 +37,26 @@ pub async fn handle(app: &App, ctx: &Ctx) -> Response {
     };
     // セッションを持たないので、切断するものが無い (MCP の仕様どおり 405)
     if ctx.method == Method::DELETE {
-        let mut headers = headers(ctx);
-        headers.insert(
-            header::ALLOW,
-            HeaderValue::from_static("GET, POST, OPTIONS"),
-        );
-        return http::respond(
-            405,
-            headers,
-            http::JSON_UTF8,
-            json!({ "error": "Method Not Allowed" }).to_string(),
-        );
+        return method_not_allowed(ctx);
     }
     if ctx.method == Method::GET || ctx.method == Method::HEAD {
         return handle_get(app, ctx, session.as_ref());
     }
     handle_rpc(app, ctx, session.as_ref()).await
+}
+
+fn method_not_allowed(ctx: &Ctx) -> Response {
+    let mut headers = headers(ctx);
+    headers.insert(
+        header::ALLOW,
+        HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    http::respond(
+        405,
+        headers,
+        http::JSON_UTF8,
+        json!({ "error": "Method Not Allowed" }).to_string(),
+    )
 }
 
 fn unauthorized(app: &App, ctx: &Ctx) -> Response {
@@ -90,17 +90,16 @@ fn unavailable(ctx: &Ctx) -> Response {
 
 fn handle_get(app: &App, ctx: &Ctx, session: Option<&Session>) -> Response {
     let accept = ctx.header(header::ACCEPT);
-    let path = ctx.path.as_str();
-    let is_dedicated_path = path == "/mcp" || path.starts_with("/mcp/");
     let wants_json = accept.contains("application/json") || ctx.q("format") == Some("json");
 
     // ブラウザで開いた人には、つなぎ方の記事を見せる
-    if !is_dedicated_path && !wants_json && accept.contains("text/html") {
+    if !wants_json && accept.contains("text/html") {
         return http::redirect(&app.cfg.connect_page());
     }
 
+    // サーバーから送り始めるものは無い (MCP の仕様どおり 405)
     if accept.contains("text/event-stream") {
-        return sse(app);
+        return method_not_allowed(ctx);
     }
 
     let tool_names: Vec<Value> = tools::definitions_for(app, session)
@@ -128,30 +127,6 @@ fn handle_get(app: &App, ctx: &Ctx, session: Option<&Session>) -> Response {
         }),
         200,
     )
-}
-
-/// 接続先を伝えたあとは、客が切るまで開けたままにする。開けておける数には上限がある
-fn sse(app: &App) -> Response {
-    let Ok(permit) = app.sse_streams.clone().try_acquire_owned() else {
-        return http::busy();
-    };
-    let endpoint = Event::default()
-        .event("endpoint")
-        .data(format!("{}/mcp", app.cfg.mcp_url));
-    let events = stream::once(async move { Ok::<_, Infallible>(endpoint) })
-        .chain(stream::pending())
-        .map(move |event| {
-            let _held_until_disconnect = &permit;
-            event
-        });
-    let mut res = Sse::new(events)
-        .keep_alive(KeepAlive::default())
-        .into_response();
-    res.headers_mut().insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        HeaderValue::from_static("*"),
-    );
-    res
 }
 
 /// 本体を埋め込んだ data: URI だけを伝える。

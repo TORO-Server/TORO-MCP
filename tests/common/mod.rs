@@ -435,7 +435,7 @@ impl TestServer {
     ) -> reqwest::Response {
         let mut request = self
             .client
-            .post(self.url("/mcp"))
+            .post(self.url("/"))
             .json(&json!({ "jsonrpc": "2.0", "id": 7, "method": method, "params": params }));
         if let Some(token) = bearer {
             request = request.bearer_auth(token);

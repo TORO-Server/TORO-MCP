@@ -157,22 +157,6 @@ pub fn no_content(headers: HeaderMap) -> Response {
     res
 }
 
-/// 別のホストへ移った URL。308 なので POST も POST のまま届く
-pub fn moved(ctx: &Ctx, to: &str) -> Response {
-    let location = if ctx.raw_query.is_empty() {
-        to.to_string()
-    } else {
-        format!("{to}?{}", ctx.raw_query)
-    };
-    let mut res = Response::new(Body::empty());
-    *res.status_mut() = StatusCode::PERMANENT_REDIRECT;
-    *res.headers_mut() = cors_headers(ctx);
-    if let Ok(value) = HeaderValue::from_str(&location) {
-        res.headers_mut().insert(header::LOCATION, value);
-    }
-    res
-}
-
 /// 302。`location` は URL として正しいものだけを渡す
 pub fn redirect(location: &str) -> Response {
     let mut res = Response::new(Body::empty());

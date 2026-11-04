@@ -44,7 +44,7 @@ async fn admin_tools_are_listed_only_for_admins() {
     let admin = server.admin_token();
     let body: Value = server
         .client
-        .get(server.url("/mcp"))
+        .get(server.url("/"))
         .bearer_auth(&admin)
         .send()
         .await
@@ -53,7 +53,7 @@ async fn admin_tools_are_listed_only_for_admins() {
         .await
         .unwrap();
     assert_eq!(body["tools"].as_array().unwrap().len(), 22);
-    let body: Value = server.get("/mcp").await.json().await.unwrap();
+    let body: Value = server.get("/").await.json().await.unwrap();
     assert_eq!(body["tools"].as_array().unwrap().len(), 7);
 }
 

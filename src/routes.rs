@@ -61,18 +61,12 @@ async fn route(app: &App, ctx: &Ctx) -> Response {
     if let Some(res) = static_files::serve(path) {
         return res;
     }
-    // RFC 9728: 接続先に /mcp を登録したクライアントは、パスを付けて聞いてくる
-    if path == "/.well-known/oauth-protected-resource"
-        || path.starts_with("/.well-known/oauth-protected-resource/")
-    {
+    // RFC 9728。認可の窓口は auth にある
+    if path == "/.well-known/oauth-protected-resource" {
         return mcp::metadata::protected_resource(app, ctx);
     }
-    // 認可の窓口は auth にある。同じ場所を探すクライアントを案内する
-    if path.starts_with("/oauth/")
-        || path == "/.well-known/oauth-authorization-server"
-        || path == "/.well-known/openid-configuration"
-    {
-        return http::moved(ctx, &format!("{}{path}", app.cfg.issuer));
+    if path == "/" {
+        return mcp::transport::handle(app, ctx).await;
     }
-    mcp::transport::handle(app, ctx).await
+    http::json(ctx, &json!({ "error": "Not Found" }), 404)
 }

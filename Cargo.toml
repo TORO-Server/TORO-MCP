@@ -1,6 +1,6 @@
 [package]
 name = "toro-mcp"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2024"
 description = "TORO Server の AI コネクタ (Remote MCP サーバー)"
 publish = false
@@ -8,7 +8,6 @@ publish = false
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 base64 = "0.23"
-futures-util = { version = "0.3", default-features = false, features = ["std"] }
 # scratch イメージで動かすので、CA 証明書は OS から読まない (rustls-tls = webpki-roots を埋め込む)
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 serde_json = { version = "1", features = ["preserve_order"] }
