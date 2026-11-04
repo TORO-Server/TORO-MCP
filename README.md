@@ -45,7 +45,7 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 | ツール | できること | 頼む先 |
 | --- | --- | --- |
 | `wiki_list_pages` | 原稿の一覧 (カテゴリで絞れる) | api `GET /docs/list` |
-| `wiki_get_page` | 原稿と SHA | api `GET /docs/raw` |
+| `wiki_get_page` | 原稿と SHA (先頭に「信頼できない入力」の注意が付く) | api `GET /docs/raw` |
 | `wiki_save_page` | 原稿の保存 (コミット)。編集権限と、`write` か `mcp` の scope が要る | api `POST /docs/save` (利用者の Bearer を渡す) |
 | `wiki_search` | 原稿の全文検索 | api `GET /docs/search` |
 | `server_get_status` | Minecraft サーバーの稼働状態 | api `GET /server/status` |
@@ -57,7 +57,7 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 
 ### 管理用のツール (Admin 以上だけ)
 
-荒らし対策 (toro-guard) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかの人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`GUARD_CONTROL_URL` が無いときは、Admin にも出しません。
+荒らし対策 (toro-guard) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`GUARD_CONTROL_URL` が無いときは、Admin にも出しません。
 
 | ツール | できること | 頼む先 (toro-guard の窓口) |
 | --- | --- | --- |
@@ -69,6 +69,7 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 | `discord_search_tools` `discord_call_tool` | TORO の Discord ボットで、許可した操作 (読む・投稿・タグ付け) | `GET /v1/discord/tools` `POST /v1/discord/call` |
 
 - **ロールは、auth の確認の結果 (`roles_source` が `live`) だけを信じる。** auth は `/introspect` のたびに、トークンの値ではなく、いまの Discord のロールを返す (60 秒だけ覚える)。OAuth のアクセストークン (ロールが空) も 90 日トークン (ロールが古くなる) も、同じに扱え、ロールを外せば、最長 60 秒で使えなくなる。auth がロールを確かめられていないとき (`token` / `unavailable`、または古い auth) は、Admin と認めない。
+- **OAuth のトークンは、同意した scope の中だけ。** 読むだけに同意したトークンでは、Admin の人でも管理用のツールは使えない。`mcp` を求める同意画面には、Admin 以上の人が何を許すことになるかが出る (TORO-Auth)。
 - **窓口には、共有の秘密ではなく、呼び出した利用者のトークンをそのまま渡す** (OAuth 2.0)。窓口 (toro-guard) が auth に尋ねて、Admin かを自分で確かめ、トークンの持ち主を `audit.jsonl` に残す。ここの判断は、ツールを見せるかどうかだけ。Discord のトークンは、このサービスには無い (toro-guard が DiscordSRV の設定から読む)。
 - **URL に入れる値は、検査してから。** 事件の ID は `[A-Za-z0-9_.-]` だけ (`..` を含めない)、プレイヤー名は `[A-Za-z0-9_.]` の 32 文字まで。
 - **利用者が書いた文章を返すツールは、先頭に「信頼できない入力」の注意を付ける。** AI が、発言や Discord の本文の中の指示に従わないようにするため。
@@ -127,9 +128,11 @@ GitHub Actions が、試験に通ったものだけを GHCR (`ghcr.io/toro-serve
 - **JWT を自分では検証しない。** 署名の鍵はこのサービスに無い。トークンの有効性は auth だけが決める
 - **Bearer だけ。** Cookie を見ないので、ブラウザからの CSRF は成り立たない
 - **無効なトークンを匿名として扱わない。** 401 を返して再認可を促す。auth の障害は 503 で、再認可させない
-- **scope を守る。** Wiki の変更には `write` か `mcp` が要る。利用者のトークンは保存のときだけ api に渡す
+- **scope を守る。** Wiki の変更には `write` か `mcp`、管理用のツールには `mcp` が要る。利用者のトークンは保存のときだけ api に渡す
+- **利用者が書いた文章は、信頼できない入力として返す。** プレイヤーの発言、Discord の本文、Wiki の本文には、先頭に注意を付ける
+- **内部の URL を見せない。** api や窓口につながらなかった理由はログにだけ残す
 - **画像は埋め込む。** `serverInfo.icons` は小さな `data:` URI 1 つだけ (外部の画像を読めないクライアントがある)
 - **応答は `no-store`。** 利用者ごとに違う応答を Cloudflare にためさせない (アイコンだけが例外)
-- 同時に処理する数 (256)、ボディの大きさ (2 MiB) に上限がある
+- 同時に処理する数 (256)、ボディの大きさ (2 MiB)、ボディを読み切るまでの時間 (30 秒) に上限がある
 
 試験は `tests/security.rs`。

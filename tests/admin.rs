@@ -93,6 +93,58 @@ async fn non_admins_are_refused_and_nothing_reaches_the_guard() {
 }
 
 #[tokio::test]
+async fn oauth_tokens_need_the_mcp_scope_for_admin_tools() {
+    let server = start().await;
+    let token_with_scope = |scope: &str| {
+        server.token(json!({
+            "id": "42", "username": "admin1", "can_edit": true, "scope": scope,
+            "roles": [ADMIN_ROLE], "roles_source": "live", "type": "mcp_access_token",
+        }))
+    };
+
+    // Admin の人でも、読むだけなどに同意したトークンでは、一覧に出ず、呼んでも窓口に届かない
+    for scope in ["read", "read write", "write", "", "mcpx"] {
+        let token = token_with_scope(scope);
+        assert_eq!(
+            tool_names(&server, Some(&token)).await.len(),
+            7,
+            "{scope:?}"
+        );
+        for name in ["guard_status", "guard_rollback", "discord_call_tool"] {
+            let (text, is_error) = server
+                .tool(
+                    name,
+                    json!({ "id": "a1", "tool": "discord_create_message" }),
+                    Some(&token),
+                )
+                .await;
+            assert!(is_error, "{name} {scope:?}: {text}");
+            assert!(text.contains("mcp"), "{text}");
+        }
+    }
+    assert!(server.guard.calls.lock().unwrap().is_empty());
+
+    // mcp に同意したものは使える
+    for scope in ["mcp", "read write mcp"] {
+        let token = token_with_scope(scope);
+        assert_eq!(
+            tool_names(&server, Some(&token)).await.len(),
+            22,
+            "{scope:?}"
+        );
+        let (text, is_error) = server.tool("guard_status", json!({}), Some(&token)).await;
+        assert!(!is_error, "{scope:?}: {text}");
+    }
+
+    // 本人が発行したトークン (scope が無い) は、ロールだけで決まる
+    let personal = server.token(json!({
+        "id": "42", "username": "admin1", "can_edit": true,
+        "purpose": "ai_connector", "roles": [ADMIN_ROLE], "roles_source": "live",
+    }));
+    assert_eq!(tool_names(&server, Some(&personal)).await.len(), 22);
+}
+
+#[tokio::test]
 async fn status_goes_to_the_guard_with_the_callers_own_token() {
     let server = start().await;
     let admin = server.admin_token();
