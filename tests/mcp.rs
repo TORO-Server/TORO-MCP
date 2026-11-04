@@ -92,7 +92,7 @@ async fn notifications_and_errors() {
     // id の無い未知の通知は黙って受ける
     let res = server
         .client
-        .post(server.url("/mcp"))
+        .post(server.url("/"))
         .json(&json!({ "jsonrpc": "2.0", "method": "notifications/other" }))
         .send()
         .await
@@ -101,7 +101,7 @@ async fn notifications_and_errors() {
 
     let res = server
         .client
-        .post(server.url("/mcp"))
+        .post(server.url("/"))
         .body("{broken")
         .send()
         .await
@@ -140,16 +140,6 @@ async fn browsers_go_to_the_wiki_and_clients_get_json() {
     assert_eq!(body["status"], "ok");
     assert_eq!(body["authenticated"], false);
     assert_eq!(body["tools"].as_array().unwrap().len(), 7);
-
-    // 専用のパスはブラウザでも JSON
-    let res = server
-        .client
-        .get(server.url("/mcp"))
-        .header(header::ACCEPT, "text/html")
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(res.json::<Value>().await.unwrap()["status"], "ok");
 }
 
 #[tokio::test]
@@ -158,7 +148,7 @@ async fn discovery_names_the_authenticated_user() {
     let token = server.editor_token();
     let body: Value = server
         .client
-        .get(server.url("/mcp"))
+        .get(server.url("/"))
         .bearer_auth(token)
         .send()
         .await
@@ -196,10 +186,9 @@ async fn icons_are_served_with_cross_origin_headers() {
 }
 
 #[tokio::test]
-async fn unknown_paths_fall_into_the_mcp_endpoint() {
+async fn unknown_paths_are_not_found() {
     let server = start().await;
-    let body: Value = server.get("/api/auth/me").await.json().await.unwrap();
-    assert_eq!(body["status"], "ok");
+    assert_eq!(server.get("/api/auth/me").await.status(), 404);
 }
 
 #[tokio::test]
@@ -211,42 +200,16 @@ async fn healthz_answers() {
 }
 
 #[tokio::test]
-async fn sse_sends_the_endpoint_and_stays_open() {
+async fn the_server_does_not_open_a_stream() {
     let server = start().await;
-    let mut res = server
+    let res = server
         .client
-        .get(server.url("/sse"))
+        .get(server.url("/"))
         .header(header::ACCEPT, "text/event-stream")
         .send()
         .await
         .unwrap();
-    assert_eq!(res.status(), 200);
-    assert_eq!(res.headers()[header::CONTENT_TYPE], "text/event-stream");
-    assert_eq!(res.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN], "*");
-
-    let first = res.chunk().await.unwrap().unwrap();
-    assert_eq!(
-        String::from_utf8_lossy(&first),
-        "event: endpoint\ndata: https://mcp.torosaba.net/\n\n"
-    );
-
-    // すぐには閉じない
-    let next = tokio::time::timeout(std::time::Duration::from_millis(200), res.chunk()).await;
-    assert!(next.is_err(), "stream closed early");
-}
-
-#[tokio::test]
-async fn the_old_mcp_path_still_answers_the_same() {
-    let server = start().await;
-    let res = server
-        .client
-        .post(server.url("/mcp"))
-        .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": "ping" }))
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(res.status(), 200);
-    assert_eq!(res.json::<Value>().await.unwrap()["result"], json!({}));
+    assert_eq!(res.status(), 405);
 }
 
 #[tokio::test]
@@ -535,11 +498,6 @@ async fn server_info_and_identity() {
 #[tokio::test]
 async fn delete_is_not_supported() {
     let server = start().await;
-    let res = server
-        .client
-        .delete(server.url("/mcp"))
-        .send()
-        .await
-        .unwrap();
+    let res = server.client.delete(server.url("/")).send().await.unwrap();
     assert_eq!(res.status(), 405);
 }
