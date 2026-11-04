@@ -39,7 +39,7 @@ pub fn definitions() -> &'static Value {
 
 /// 管理用のツールを見せてよいか。窓口が設定されていて、呼び出し元が Admin 以上のとき
 fn admin_allowed(app: &App, session: Option<&Session>) -> bool {
-    app.cfg.guard_token.is_some() && session.is_some_and(|s| s.is_admin(&app.cfg.admin_roles))
+    app.cfg.guard_url.is_some() && session.is_some_and(|s| s.is_admin(&app.cfg.admin_roles))
 }
 
 /// 呼び出し元に見せるツールの一覧。管理用のツールは、Admin 以上の人にだけ足す
@@ -55,11 +55,9 @@ pub async fn call(app: &App, name: &str, args: &Value, caller: Option<&Caller<'_
     if admin::is_admin_tool(name) {
         // 一覧に出さないだけでなく、呼ばれても、ここで断る
         let Some(caller) = caller.filter(|c| admin_allowed(app, Some(c.session))) else {
-            return failure(
-                "このツールは、Admin 以上のロールを持つ人の 90 日トークン (auth のページで発行) でつないだときだけ使えます",
-            );
+            return failure("このツールは、Admin 以上のロールを持つ人でつないだときだけ使えます");
         };
-        return admin::call(app, name, args, caller.session).await;
+        return admin::call(app, name, args, caller).await;
     }
     match name {
         "wiki_list_pages" => wiki::list_pages(app, args).await,

@@ -53,12 +53,15 @@ impl Session {
             .unwrap_or_default()
     }
 
-    /// 管理用のツールを使ってよいか。トークンに入っているロールが、`admin_roles` のどれかであること。
-    /// OAuth のアクセストークンはロールを持たないので、90 日トークン (auth のページで発行) だけが通る
+    /// 管理用のツールを使ってよいか。ロールが `admin_roles` のどれかであること。
+    /// ロールは、auth が確認のたびに、いまの Discord で確かめた値 (`roles_source` が `live`) だけを信じる。
+    /// OAuth のアクセストークンも 90 日トークンも同じに扱える (トークンに入っている古いロールは見ない)
     pub fn is_admin(&self, admin_roles: &[String]) -> bool {
-        self.role_ids()
-            .iter()
-            .any(|role| admin_roles.iter().any(|admin| admin == role))
+        self.claims.get("roles_source").and_then(Value::as_str) == Some("live")
+            && self
+                .role_ids()
+                .iter()
+                .any(|role| admin_roles.iter().any(|admin| admin == role))
     }
 
     fn str_claim(&self, name: &str) -> &str {
@@ -158,12 +161,18 @@ mod tests {
             claims: claims.as_object().unwrap().clone(),
         };
         let admins = vec!["10".to_string(), "20".to_string()];
-        assert!(session(json!({ "roles": ["5", "20"] })).is_admin(&admins));
-        assert!(!session(json!({ "roles": ["5", "6"] })).is_admin(&admins));
-        assert!(!session(json!({ "roles": [] })).is_admin(&admins));
-        assert!(!session(json!({})).is_admin(&admins));
-        assert!(!session(json!({ "roles": ["10"] })).is_admin(&[]));
+        let live = |roles: Value| session(json!({ "roles": roles, "roles_source": "live" }));
+        assert!(live(json!(["5", "20"])).is_admin(&admins));
+        assert!(!live(json!(["5", "6"])).is_admin(&admins));
+        assert!(!live(json!([])).is_admin(&admins));
+        assert!(!live(json!(["10"])).is_admin(&[]));
         // 数字でないロールや、ロールの名前は通さない
-        assert!(!session(json!({ "roles": [10] })).is_admin(&admins));
+        assert!(!live(json!([10])).is_admin(&admins));
+        // いまの Discord で確かめていないロール (トークンに入っていた古い値) は、信じない
+        assert!(!session(json!({ "roles": ["20"] })).is_admin(&admins));
+        assert!(!session(json!({ "roles": ["20"], "roles_source": "token" })).is_admin(&admins));
+        assert!(
+            !session(json!({ "roles": ["20"], "roles_source": "unavailable" })).is_admin(&admins)
+        );
     }
 }

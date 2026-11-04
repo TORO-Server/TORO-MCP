@@ -35,7 +35,7 @@ async fn admin_tools_are_listed_only_for_admins() {
     assert!(names.contains(&"discord_call_tool".to_string()));
 
     // 窓口が設定されていないときは、Admin にも出さない
-    let server = start_with(|cfg| cfg.guard_token = None).await;
+    let server = start_with(|cfg| cfg.guard_url = None).await;
     let admin = server.admin_token();
     assert_eq!(tool_names(&server, Some(&admin)).await.len(), 7);
 
@@ -93,7 +93,7 @@ async fn non_admins_are_refused_and_nothing_reaches_the_guard() {
 }
 
 #[tokio::test]
-async fn status_goes_to_the_guard_with_the_secret_and_the_caller() {
+async fn status_goes_to_the_guard_with_the_callers_own_token() {
     let server = start().await;
     let admin = server.admin_token();
     let (text, is_error) = server.tool("guard_status", json!({}), Some(&admin)).await;
@@ -103,10 +103,8 @@ async fn status_goes_to_the_guard_with_the_secret_and_the_caller() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].method, "GET");
     assert_eq!(calls[0].target, "/v1/status");
-    assert_eq!(calls[0].authorization, format!("Bearer {GUARD_TOKEN}"));
-    // 利用者のトークンそのものは、窓口に渡さない
-    assert!(!calls[0].authorization.contains(&admin));
-    assert_eq!(calls[0].user, "admin1 (id 42)");
+    // 共有の秘密ではなく、呼び出した利用者の Bearer トークンをそのまま渡す (窓口が auth に尋ねて、Admin かを確かめる)
+    assert_eq!(calls[0].authorization, format!("Bearer {admin}"));
 }
 
 #[tokio::test]
@@ -411,16 +409,47 @@ async fn guard_errors_are_shown_as_text() {
     );
 
     // 窓口が落ちている
-    let server = start_with(|cfg| cfg.guard_url = "http://127.0.0.1:9".into()).await;
+    let server = start_with(|cfg| cfg.guard_url = Some("http://127.0.0.1:9".into())).await;
     let admin = server.admin_token();
     let (text, is_error) = server.tool("guard_status", json!({}), Some(&admin)).await;
     assert!(is_error);
     assert!(text.contains("つなげません"), "{text}");
 
-    // 秘密が合わない
-    let server = start_with(|cfg| cfg.guard_token = Some("wrong".into())).await;
-    let admin = server.admin_token();
-    let (text, is_error) = server.tool("guard_status", json!({}), Some(&admin)).await;
+    // 窓口が、トークンを断る (MCP が Admin と見ても、窓口が auth に尋ねた結果が正しい)
+    let server = start().await;
+    server.auth.register("tok-nobody", admin_claims());
+    let (text, is_error) = server
+        .tool("guard_status", json!({}), Some("tok-nobody"))
+        .await;
     assert!(is_error);
-    assert!(text.contains("GUARD_CONTROL_TOKEN"), "{text}");
+    assert!(text.contains("期限切れ") && text.contains("401"), "{text}");
+    server.auth.register("tok-notadmin", admin_claims());
+    let (text, is_error) = server
+        .tool(
+            "guard_rollback",
+            json!({ "id": "a1" }),
+            Some("tok-notadmin"),
+        )
+        .await;
+    assert!(is_error);
+    assert!(text.contains("Admin") && text.contains("403"), "{text}");
+}
+
+#[tokio::test]
+async fn roles_that_auth_did_not_confirm_are_not_trusted() {
+    let server = start().await;
+    // トークンに入っていた古いロール (roles_source が live でない) では、Admin にならない
+    let stale = server.token(json!({
+        "id": "50", "username": "stale", "roles": [ADMIN_ROLE], "roles_source": "token",
+    }));
+    let unavailable = server.token(json!({
+        "id": "51", "username": "unavail", "roles": [ADMIN_ROLE], "roles_source": "unavailable",
+    }));
+    let old_auth = server.token(json!({ "id": "52", "username": "old", "roles": [ADMIN_ROLE] }));
+    for token in [&stale, &unavailable, &old_auth] {
+        assert_eq!(tool_names(&server, Some(token)).await.len(), 7);
+        let (_, is_error) = server.tool("guard_status", json!({}), Some(token)).await;
+        assert!(is_error);
+    }
+    assert!(server.guard.calls.lock().unwrap().is_empty());
 }

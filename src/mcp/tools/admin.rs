@@ -1,8 +1,9 @@
 //! 荒らし対策 (toro-guard の窓口) と Discord のツール。Admin 以上の人の頼みを取り次ぐ
 //!
-//! このサービスは、窓口の共有の秘密 (`GUARD_CONTROL_TOKEN`) だけを持つ。Discord のトークンは持たない
-//! (toro-guard が DiscordSRV の設定から読み、Discord-MCP に渡す)。だれの頼みかは `X-Toro-User` で伝わり、
-//! toro-guard の audit.jsonl に残る。
+//! 窓口 (toro-guard) には、共有の秘密を使わず、**呼び出した利用者の Bearer トークンをそのまま渡す** (OAuth 2.0)。
+//! 窓口が auth の `/introspect` に尋ね、いまの Discord のロールが Admin 以上かを、自分で確かめる (ここの判断は、見せるかどうかだけ)。
+//! 窓口の audit.jsonl には、トークンの持ち主が残る。Discord のトークンは、このサービスには無い
+//! (toro-guard が DiscordSRV の設定から読み、Discord-MCP に渡す)。
 
 use std::time::Duration;
 
@@ -10,9 +11,8 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde_json::{Value, json};
 
-use super::{arg, failure, success};
+use super::{Caller, arg, failure, success};
 use crate::App;
-use crate::identity::Session;
 use crate::util::encode_uri_component;
 
 /// 管理用のツールの名前 (定義は assets/mcp/tools_admin.json)
@@ -75,21 +75,19 @@ fn pretty(value: &Value) -> String {
 /// 窓口に 1 回頼む。エラーは、窓口の `error` をそのまま利用者に見せられる文にして返す
 async fn ask(
     app: &App,
-    who: &Session,
+    who: &Caller<'_>,
     method: reqwest::Method,
     path_and_query: &str,
     body: Option<Value>,
     timeout: Duration,
 ) -> Result<Reply, String> {
-    let token = app.cfg.guard_token.as_deref().unwrap_or("");
+    let Some(base) = app.cfg.guard_url.as_deref() else {
+        return Err("荒らし対策の窓口が設定されていません".into());
+    };
     let mut request = app
         .http
-        .request(method, format!("{}{path_and_query}", app.cfg.guard_url))
-        .bearer_auth(token)
-        .header(
-            "X-Toro-User",
-            format!("{} (id {})", who.username(), who.id()),
-        )
+        .request(method, format!("{base}{path_and_query}"))
+        .bearer_auth(who.token)
         .timeout(timeout);
     if let Some(body) = body {
         request = request.json(&body);
@@ -114,11 +112,6 @@ async fn ask(
     let body: Value = res.json().await.unwrap_or(Value::Null);
     if status.is_success() {
         return Ok(Reply::Json(body));
-    }
-    if status.as_u16() == 401 {
-        return Err(
-            "荒らし対策の窓口に認証できません (GUARD_CONTROL_TOKEN が合っていません)".into(),
-        );
     }
     let message = body["error"].as_str().unwrap_or("窓口がエラーを返しました");
     Err(format!("{message} (HTTP {})", status.as_u16()))
@@ -171,7 +164,7 @@ fn number(args: &Value, name: &str) -> Option<f64> {
     }
 }
 
-pub async fn call(app: &App, name: &str, args: &Value, who: &Session) -> Value {
+pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Value {
     use reqwest::Method;
     let get = |path: String| async move {
         ask(app, who, Method::GET, &path, None, DEFAULT_TIMEOUT).await

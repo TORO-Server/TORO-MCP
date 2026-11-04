@@ -59,7 +59,7 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 
 ### 管理用のツール (Admin 以上だけ)
 
-荒らし対策 (toro-guard) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**トークンのロールが `ADMIN_ROLE_IDS` のどれかの人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`GUARD_CONTROL_TOKEN` が無いときは、Admin にも出しません。
+荒らし対策 (toro-guard) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかの人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`GUARD_CONTROL_URL` が無いときは、Admin にも出しません。
 
 | ツール | できること | 頼む先 (toro-guard の窓口) |
 | --- | --- | --- |
@@ -70,8 +70,8 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 | `guard_map_screenshot` `guard_get_screenshot` | BlueMap の撮影を始める (job) / 撮れた画像を取る | `POST /v1/screenshot` `GET /v1/screenshots/{job}` |
 | `discord_search_tools` `discord_call_tool` | TORO の Discord ボットで、許可した操作 (読む・投稿・タグ付け) | `GET /v1/discord/tools` `POST /v1/discord/call` |
 
-- **ロールは、トークンの `roles` から見る。** auth のページで発行した 90 日トークンには入るが、OAuth のアクセストークンには入らない (空)。OAuth でつないだ AI クライアントには、管理用のツールは出ない。
-- **窓口への認証は、共有の秘密 (`GUARD_CONTROL_TOKEN`) だけ。** 利用者のトークンは窓口に渡さず、`X-Toro-User: 名前 (id)` で、頼んだ人を伝える (窓口の `audit.jsonl` に残る)。Discord のトークンは、このサービスには無い (toro-guard が DiscordSRV の設定から読む)。
+- **ロールは、auth の確認の結果 (`roles_source` が `live`) だけを信じる。** auth は `/introspect` のたびに、トークンの値ではなく、いまの Discord のロールを返す (60 秒だけ覚える)。OAuth のアクセストークン (ロールが空) も 90 日トークン (ロールが古くなる) も、同じに扱え、ロールを外せば、最長 60 秒で使えなくなる。auth がロールを確かめられていないとき (`token` / `unavailable`、または古い auth) は、Admin と認めない。
+- **窓口には、共有の秘密ではなく、呼び出した利用者のトークンをそのまま渡す** (OAuth 2.0)。窓口 (toro-guard) が auth に尋ねて、Admin かを自分で確かめ、トークンの持ち主を `audit.jsonl` に残す。ここの判断は、ツールを見せるかどうかだけ。Discord のトークンは、このサービスには無い (toro-guard が DiscordSRV の設定から読む)。
 - **URL に入れる値は、検査してから。** 事件の ID は `[A-Za-z0-9_.-]` だけ (`..` を含めない)、プレイヤー名は `[A-Za-z0-9_.]` の 32 文字まで。
 - **利用者が書いた文章を返すツールは、先頭に「信頼できない入力」の注意を付ける。** AI が、発言や Discord の本文の中の指示に従わないようにするため。
 - 窓口への 1 回の待ちは 30 秒 (Muse のコネクターの 1 回の呼び出しが 45 秒で切れるため)。撮影は、始める・取るの 2 回に分けている。
@@ -102,7 +102,7 @@ cargo test
 
 ## 設定
 
-`.env.example` を見てください。秘密は、任意の `GUARD_CONTROL_TOKEN` だけです。既定は本番の値です。
+`.env.example` を見てください。秘密の値はありません。既定は本番の値です。
 
 | 環境変数 | 既定 | 意味 |
 | --- | --- | --- |

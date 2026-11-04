@@ -228,7 +228,6 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
     spawn(router).await
 }
 
-pub const GUARD_TOKEN: &str = "guard-secret-for-tests";
 pub const ADMIN_ROLE: &str = "497387545928138762";
 pub const PNG_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nfake";
 
@@ -239,7 +238,6 @@ pub struct GuardCall {
     /// パスと、? 以降
     pub target: String,
     pub authorization: String,
-    pub user: String,
     pub body: Value,
 }
 
@@ -271,12 +269,21 @@ async fn start_fake_guard(state: Arc<FakeGuard>) -> String {
                     .map(ToString::to_string)
                     .unwrap_or_default(),
                 authorization: header_of("authorization"),
-                user: header_of("x-toro-user"),
                 body: serde_json::from_slice(&body).unwrap_or(Value::Null),
             };
             state.calls.lock().unwrap().push(call.clone());
-            if call.authorization != format!("Bearer {GUARD_TOKEN}") {
-                return json_response(401, json!({ "error": "unauthorized" }));
+            // 本物の窓口は、利用者のトークンを auth に尋ねて、Admin かを確かめる。ここでは、トークンの名前で決める
+            match call.authorization.as_str() {
+                "Bearer tok-nobody" => {
+                    return json_response(
+                        401,
+                        json!({ "error": "トークンが無効か、期限切れです" }),
+                    );
+                }
+                "Bearer tok-notadmin" => {
+                    return json_response(403, json!({ "error": "Admin 以上のロールが要ります" }));
+                }
+                _ => {}
             }
             let path = parts.uri.path();
             if path.contains("/missing") {
@@ -350,8 +357,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
         cors_origins: vec![WIKI_ORIGIN.into()],
         auth_internal_url: start_fake_auth(auth.clone()).await,
         api_internal_url: start_fake_api(api.clone()).await,
-        guard_url: start_fake_guard(guard.clone()).await,
-        guard_token: Some(GUARD_TOKEN.into()),
+        guard_url: Some(start_fake_guard(guard.clone()).await),
         admin_roles: vec![ADMIN_ROLE.into()],
     };
     customize(&mut cfg);
@@ -383,9 +389,9 @@ pub fn editor_claims() -> Value {
     json!({ "id": "1001", "username": "editor", "can_edit": true, "roles": [] })
 }
 
-/// Admin ロールを持つ利用者のクレーム (90 日トークンに入る形)
+/// Admin ロールを持つ利用者のクレーム (auth が、いまの Discord で確かめたロール)
 pub fn admin_claims() -> Value {
-    json!({ "id": "42", "username": "admin1", "can_edit": true, "roles": [ADMIN_ROLE, "1"] })
+    json!({ "id": "42", "username": "admin1", "can_edit": true, "roles": [ADMIN_ROLE, "1"], "roles_source": "live" })
 }
 
 impl TestServer {
