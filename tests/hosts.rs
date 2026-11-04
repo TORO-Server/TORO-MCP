@@ -9,52 +9,39 @@ use serde_json::{Value, json};
 #[tokio::test]
 async fn protected_resource_metadata_points_to_auth() {
     let server = start().await;
-    for path in [
-        "/.well-known/oauth-protected-resource",
-        "/.well-known/oauth-protected-resource/mcp",
-    ] {
-        let body: Value = server.get(path).await.json().await.unwrap();
-        assert_eq!(body["resource"], "https://mcp.torosaba.net", "{path}");
-        assert_eq!(body["resource_name"], "TORO Server");
-        assert_eq!(body["authorization_servers"], json!([AUTH_URL]));
-        assert_eq!(body["scopes_supported"], json!(["read", "write", "mcp"]));
-        assert!(
-            body["resource_documentation"]
-                .as_str()
-                .unwrap()
-                .starts_with("https://wiki.torosaba.net/wiki/")
-        );
-    }
+    let body: Value = server
+        .get("/.well-known/oauth-protected-resource")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["resource"], "https://mcp.torosaba.net");
+    assert_eq!(body["resource_name"], "TORO Server");
+    assert_eq!(body["authorization_servers"], json!([AUTH_URL]));
+    assert_eq!(body["scopes_supported"], json!(["read", "write", "mcp"]));
+    assert!(
+        body["resource_documentation"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://wiki.torosaba.net/wiki/")
+    );
 }
 
 #[tokio::test]
-async fn authorization_endpoints_move_to_auth() {
+async fn only_the_root_answers_as_mcp() {
     let server = start().await;
     for path in [
+        "/mcp",
+        "/sse",
+        "/.well-known/oauth-protected-resource/mcp",
         "/.well-known/oauth-authorization-server",
         "/.well-known/openid-configuration",
         "/oauth/register",
         "/oauth/authorize?client_id=x",
         "/oauth/token",
     ] {
-        let res = server.get(path).await;
-        assert_eq!(res.status(), 308, "{path}");
-        assert_eq!(location(&res), format!("{AUTH_URL}{path}"));
+        assert_eq!(server.get(path).await.status(), 404, "{path}");
     }
-
-    // POST も 308 で届き、CORS も付く
-    let res = server
-        .client
-        .post(server.url("/oauth/token"))
-        .header(header::ORIGIN, WIKI_ORIGIN)
-        .send()
-        .await
-        .unwrap();
-    assert_eq!(res.status(), 308);
-    assert_eq!(
-        res.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
-        WIKI_ORIGIN
-    );
 }
 
 #[tokio::test]
@@ -111,12 +98,6 @@ async fn pages_take_their_urls_from_the_config() {
     assert_eq!(
         meta["authorization_servers"],
         json!(["https://auth.example.test"])
-    );
-
-    let moved = server.get("/oauth/authorize").await;
-    assert_eq!(
-        location(&moved),
-        "https://auth.example.test/oauth/authorize"
     );
 
     let res = server.rpc("tools/list", json!({}), Some("bad")).await;

@@ -45,7 +45,7 @@ pub fn info(app: &App) -> Value {
 - REST API (Wiki の読み書き): {api}/
 - Remote MCP サーバー (AI クライアントの接続先): {mcp}/
 - Minecraft 接続先: torosaba.net
-- URL と役割の正本: {roles}",
+- 各サービスの URL と役割: {roles}",
         wiki = cfg.wiki_url,
         auth = cfg.issuer,
         api = cfg.api_url,

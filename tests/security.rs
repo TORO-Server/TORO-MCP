@@ -25,7 +25,7 @@ async fn unknown_and_expired_tokens_get_401_so_clients_can_reauthorize() {
 
         let res = server
             .client
-            .get(server.url("/mcp"))
+            .get(server.url("/"))
             .bearer_auth(token)
             .send()
             .await
@@ -71,7 +71,7 @@ async fn an_auth_outage_is_503_not_401() {
         server.rpc("tools/list", json!({}), Some(&token)).await,
         server
             .client
-            .get(server.url("/mcp"))
+            .get(server.url("/"))
             .bearer_auth(&token)
             .send()
             .await
@@ -117,7 +117,7 @@ async fn mcp_ignores_cookies() {
 
     let res = server
         .client
-        .post(server.url("/mcp"))
+        .post(server.url("/"))
         .header(header::COOKIE, &cookie)
         .header(header::ORIGIN, WIKI_ORIGIN)
         .json(&json!({
@@ -133,7 +133,7 @@ async fn mcp_ignores_cookies() {
 
     let discovery: Value = server
         .client
-        .get(server.url("/mcp"))
+        .get(server.url("/"))
         .header(header::COOKIE, &cookie)
         .send()
         .await
@@ -184,7 +184,7 @@ async fn only_exact_origins_get_credentialed_cors() {
     let origin_header = |origin: &'static str| {
         let request = server
             .client
-            .get(server.url("/mcp"))
+            .get(server.url("/"))
             .header(header::ORIGIN, origin);
         async move { request.send().await.unwrap() }
     };
@@ -211,7 +211,7 @@ async fn only_exact_origins_get_credentialed_cors() {
 
     let res = server
         .client
-        .request(reqwest::Method::OPTIONS, server.url("/mcp"))
+        .request(reqwest::Method::OPTIONS, server.url("/"))
         .header(header::ORIGIN, WIKI_ORIGIN)
         .send()
         .await
@@ -228,7 +228,7 @@ async fn only_exact_origins_get_credentialed_cors() {
 #[tokio::test]
 async fn responses_are_not_cacheable_unless_they_say_so() {
     let server = start().await;
-    let res = server.get("/mcp").await;
+    let res = server.get("/").await;
     assert_eq!(res.headers()[header::CACHE_CONTROL], "no-store");
     assert_eq!(res.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
 
@@ -247,44 +247,10 @@ async fn large_bodies_are_refused() {
     let server = start().await;
     let res = server
         .client
-        .post(server.url("/mcp"))
+        .post(server.url("/"))
         .body(vec![b'x'; 2 * 1024 * 1024 + 1])
         .send()
         .await
         .unwrap();
     assert_eq!(res.status(), 413);
-}
-
-#[tokio::test]
-async fn sse_streams_are_limited_and_released() {
-    let server = start().await;
-    let open = || {
-        server
-            .client
-            .get(server.url("/sse"))
-            .header(header::ACCEPT, "text/event-stream")
-            .send()
-    };
-
-    let mut streams = Vec::new();
-    for _ in 0..toro_mcp::MAX_SSE_STREAMS {
-        let mut res = open().await.unwrap();
-        assert_eq!(res.status(), 200);
-        // 最初のイベントまで受けて、確かに始まったことを確かめる
-        res.chunk().await.unwrap().unwrap();
-        streams.push(res);
-    }
-    assert_eq!(open().await.unwrap().status(), 503);
-
-    drop(streams);
-    // 切断が伝わるのを待つ
-    let mut status = 0;
-    for _ in 0..50 {
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        status = open().await.unwrap().status().as_u16();
-        if status == 200 {
-            break;
-        }
-    }
-    assert_eq!(status, 200);
 }
