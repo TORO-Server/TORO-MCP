@@ -227,12 +227,26 @@ async fn sse_sends_the_endpoint_and_stays_open() {
     let first = res.chunk().await.unwrap().unwrap();
     assert_eq!(
         String::from_utf8_lossy(&first),
-        "event: endpoint\ndata: https://mcp.torosaba.net/mcp\n\n"
+        "event: endpoint\ndata: https://mcp.torosaba.net/\n\n"
     );
 
     // すぐには閉じない
     let next = tokio::time::timeout(std::time::Duration::from_millis(200), res.chunk()).await;
     assert!(next.is_err(), "stream closed early");
+}
+
+#[tokio::test]
+async fn the_old_mcp_path_still_answers_the_same() {
+    let server = start().await;
+    let res = server
+        .client
+        .post(server.url("/mcp"))
+        .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": "ping" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    assert_eq!(res.json::<Value>().await.unwrap()["result"], json!({}));
 }
 
 #[tokio::test]

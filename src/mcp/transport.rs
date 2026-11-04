@@ -91,6 +91,7 @@ fn unavailable(ctx: &Ctx) -> Response {
 fn handle_get(app: &App, ctx: &Ctx, session: Option<&Session>) -> Response {
     let accept = ctx.header(header::ACCEPT);
     let path = ctx.path.as_str();
+    // 接続先は `/` だけを伝える。以前に `/mcp` で登録したクライアントのために、`/mcp` も同じに答える
     let is_dedicated_path = path == "/mcp" || path.starts_with("/mcp/");
     let wants_json = accept.contains("application/json") || ctx.q("format") == Some("json");
 
@@ -137,7 +138,7 @@ fn sse(app: &App) -> Response {
     };
     let endpoint = Event::default()
         .event("endpoint")
-        .data(format!("{}/mcp", app.cfg.mcp_url));
+        .data(format!("{}/", app.cfg.mcp_url));
     let events = stream::once(async move { Ok::<_, Infallible>(endpoint) })
         .chain(stream::pending())
         .map(move |event| {

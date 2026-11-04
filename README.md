@@ -25,10 +25,10 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 
 | パス | 答え |
 | --- | --- |
-| `POST /mcp` (どのパスでも可) | JSON-RPC 2.0 (`initialize`、`tools/list`、`tools/call`、`ping` ほか)。通知には 202 |
-| `GET /mcp` | 発見用の JSON (ツールの一覧と、呼び出し元)。`Accept: text/event-stream` なら SSE (最初に `endpoint` のイベントを送り、客が切るまで開けておく) |
-| `GET /` ほか (ブラウザ) | Wiki の「AIクライアントの接続方法」へ 302。`/mcp` と、JSON を求める要求は除く |
-| `DELETE /mcp` | 405 (セッションを持たない) |
+| `POST /` (どのパスでも可) | JSON-RPC 2.0 (`initialize`、`tools/list`、`tools/call`、`ping` ほか)。通知には 202 |
+| `GET /` | 発見用の JSON (ツールの一覧と、呼び出し元)。`Accept: text/event-stream` なら SSE (最初に `endpoint` のイベントを送り、客が切るまで開けておく) |
+| `GET /` ほか (ブラウザ) | Wiki の「AIクライアントの接続方法」へ 302。JSON を求める要求は除く |
+| `DELETE /` | 405 (セッションを持たない) |
 | `/.well-known/oauth-protected-resource[/...]` | RFC 9728 の保護リソースのメタデータ。認可サーバーは auth |
 | `/oauth/*`、`/.well-known/oauth-authorization-server`、`/.well-known/openid-configuration` | auth の同じパスへ 308 |
 | `/favicon.ico`、`/apple-touch-icon.png`、`/icon-{64,192,512}.png` ほか | TORO のアイコン |
