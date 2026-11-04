@@ -228,11 +228,89 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
     spawn(router).await
 }
 
+pub const GUARD_TOKEN: &str = "guard-secret-for-tests";
+pub const ADMIN_ROLE: &str = "497387545928138762";
+pub const PNG_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nfake";
+
+/// toro-guard の窓口に届いた依頼
+#[derive(Clone, Debug)]
+pub struct GuardCall {
+    pub method: String,
+    /// パスと、? 以降
+    pub target: String,
+    pub authorization: String,
+    pub user: String,
+    pub body: Value,
+}
+
+/// 届いた依頼を覚えて、決まった答えを返す toro-guard の窓口
+#[derive(Default)]
+pub struct FakeGuard {
+    pub calls: Mutex<Vec<GuardCall>>,
+}
+
+async fn start_fake_guard(state: Arc<FakeGuard>) -> String {
+    let router = Router::new().fallback(move |req: Request| {
+        let state = state.clone();
+        async move {
+            let (parts, body) = req.into_parts();
+            let body = to_bytes(body, usize::MAX).await.unwrap();
+            let header_of = |name: &str| {
+                parts
+                    .headers
+                    .get(name)
+                    .and_then(|h| h.to_str().ok())
+                    .unwrap_or("")
+                    .to_string()
+            };
+            let call = GuardCall {
+                method: parts.method.to_string(),
+                target: parts
+                    .uri
+                    .path_and_query()
+                    .map(ToString::to_string)
+                    .unwrap_or_default(),
+                authorization: header_of("authorization"),
+                user: header_of("x-toro-user"),
+                body: serde_json::from_slice(&body).unwrap_or(Value::Null),
+            };
+            state.calls.lock().unwrap().push(call.clone());
+            if call.authorization != format!("Bearer {GUARD_TOKEN}") {
+                return json_response(401, json!({ "error": "unauthorized" }));
+            }
+            let path = parts.uri.path();
+            if path.contains("/missing") {
+                return json_response(404, json!({ "error": "incident not found" }));
+            }
+            if path == "/v1/screenshot" {
+                return json_response(202, json!({ "job": "abc123", "status": "pending" }));
+            }
+            if path == "/v1/screenshots/slow1" {
+                return json_response(202, json!({ "job": "slow1", "status": "pending" }));
+            }
+            if path.ends_with("/images/damage.png") || path == "/v1/screenshots/abc123" {
+                return (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, "image/png")],
+                    PNG_BYTES.to_vec(),
+                )
+                    .into_response();
+            }
+            if path == "/v1/status" {
+                return json_response(200, json!({ "mode": "review", "pending": 2 }));
+            }
+            json_response(200, json!({ "ok": true, "target": call.target }))
+        }
+    });
+    spawn(router).await
+}
+
 pub struct TestServer {
     pub base: String,
     pub client: reqwest::Client,
     pub auth: Arc<FakeAuth>,
     pub api: Arc<FakeApi>,
+    pub guard: Arc<FakeGuard>,
 }
 
 pub async fn start() -> TestServer {
@@ -245,6 +323,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
 
     let auth = Arc::new(FakeAuth::default());
     let api = Arc::new(FakeApi::default());
+    let guard = Arc::new(FakeGuard::default());
     api.docs.lock().unwrap().extend([
         (
             "01_About/a.md".to_string(),
@@ -271,6 +350,9 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
         cors_origins: vec![WIKI_ORIGIN.into()],
         auth_internal_url: start_fake_auth(auth.clone()).await,
         api_internal_url: start_fake_api(api.clone()).await,
+        guard_url: start_fake_guard(guard.clone()).await,
+        guard_token: Some(GUARD_TOKEN.into()),
+        admin_roles: vec![ADMIN_ROLE.into()],
     };
     customize(&mut cfg);
 
@@ -285,6 +367,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
             .unwrap(),
         auth,
         api,
+        guard,
     }
 }
 
@@ -300,7 +383,16 @@ pub fn editor_claims() -> Value {
     json!({ "id": "1001", "username": "editor", "can_edit": true, "roles": [] })
 }
 
+/// Admin ロールを持つ利用者のクレーム (90 日トークンに入る形)
+pub fn admin_claims() -> Value {
+    json!({ "id": "42", "username": "admin1", "can_edit": true, "roles": [ADMIN_ROLE, "1"] })
+}
+
 impl TestServer {
+    pub fn admin_token(&self) -> String {
+        self.token(admin_claims())
+    }
+
     pub fn url(&self, path: &str) -> String {
         format!("{}{path}", self.base)
     }

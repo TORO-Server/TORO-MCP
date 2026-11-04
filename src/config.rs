@@ -1,4 +1,7 @@
-//! 環境変数からの設定。秘密は無く、既定は本番の値にしてある
+//! 環境変数からの設定。既定は本番の値にしてある。秘密は `GUARD_CONTROL_TOKEN` だけ (任意)
+
+/// 管理用のツールを使える Discord のロール (TORO サーバーの Owner と Admin)
+const DEFAULT_ADMIN_ROLES: &str = "338718477332512769,497387545928138762";
 
 #[derive(Clone)]
 pub struct Config {
@@ -18,6 +21,13 @@ pub struct Config {
     pub auth_internal_url: String,
     /// Wiki と稼働状態のデータを頼む先 (api。末尾の / なし)
     pub api_internal_url: String,
+
+    /// 荒らし対策の窓口 (toro-guard の control。内部のネットワークだけ。末尾の / なし)
+    pub guard_url: String,
+    /// 窓口の共有の秘密。無ければ、管理用のツールは出さない
+    pub guard_token: Option<String>,
+    /// 管理用のツールを使える Discord のロールの ID
+    pub admin_roles: Vec<String>,
 }
 
 fn optional(name: &str) -> Option<String> {
@@ -54,6 +64,13 @@ impl Config {
                 .collect(),
             auth_internal_url: trimmed("AUTH_INTERNAL_URL", "http://toro-auth:8081"),
             api_internal_url: trimmed("API_INTERNAL_URL", "http://toro-api:8080"),
+            guard_url: trimmed("GUARD_CONTROL_URL", "http://toro-guard:8090"),
+            guard_token: optional("GUARD_CONTROL_TOKEN"),
+            admin_roles: or_default("ADMIN_ROLE_IDS", DEFAULT_ADMIN_ROLES)
+                .split(',')
+                .map(|role| role.trim().to_string())
+                .filter(|role| !role.is_empty())
+                .collect(),
         })
     }
 }

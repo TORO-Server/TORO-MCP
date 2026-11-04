@@ -103,7 +103,7 @@ fn handle_get(app: &App, ctx: &Ctx, session: Option<&Session>) -> Response {
         return sse(app);
     }
 
-    let tool_names: Vec<Value> = tools::definitions()
+    let tool_names: Vec<Value> = tools::definitions_for(app, session)
         .as_array()
         .map(|list| list.iter().map(|tool| tool["name"].clone()).collect())
         .unwrap_or_default();
@@ -204,7 +204,7 @@ async fn handle_rpc(app: &App, ctx: &Ctx, session: Option<&Session>) -> Response
             }))
         }
         "notifications/initialized" => http::accepted(headers(ctx)),
-        "tools/list" => reply(json!({ "tools": tools::definitions() })),
+        "tools/list" => reply(json!({ "tools": tools::definitions_for(app, session) })),
         "resources/list" => reply(json!({ "resources": [] })),
         "prompts/list" => reply(json!({ "prompts": [] })),
         "tools/call" => {

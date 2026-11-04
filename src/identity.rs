@@ -53,6 +53,14 @@ impl Session {
             .unwrap_or_default()
     }
 
+    /// 管理用のツールを使ってよいか。トークンに入っているロールが、`admin_roles` のどれかであること。
+    /// OAuth のアクセストークンはロールを持たないので、90 日トークン (auth のページで発行) だけが通る
+    pub fn is_admin(&self, admin_roles: &[String]) -> bool {
+        self.role_ids()
+            .iter()
+            .any(|role| admin_roles.iter().any(|admin| admin == role))
+    }
+
     fn str_claim(&self, name: &str) -> &str {
         self.claims.get(name).and_then(Value::as_str).unwrap_or("")
     }
@@ -142,5 +150,20 @@ mod tests {
         assert!(session(json!({ "can_edit": true, "scope": "mcp" })).can_write());
         assert!(!session(json!({ "can_edit": true, "scope": "read" })).can_write());
         assert!(!session(json!({ "can_edit": false, "scope": "write" })).can_write());
+    }
+
+    #[test]
+    fn admin_needs_one_of_the_admin_roles() {
+        let session = |claims: Value| Session {
+            claims: claims.as_object().unwrap().clone(),
+        };
+        let admins = vec!["10".to_string(), "20".to_string()];
+        assert!(session(json!({ "roles": ["5", "20"] })).is_admin(&admins));
+        assert!(!session(json!({ "roles": ["5", "6"] })).is_admin(&admins));
+        assert!(!session(json!({ "roles": [] })).is_admin(&admins));
+        assert!(!session(json!({})).is_admin(&admins));
+        assert!(!session(json!({ "roles": ["10"] })).is_admin(&[]));
+        // 数字でないロールや、ロールの名前は通さない
+        assert!(!session(json!({ "roles": [10] })).is_admin(&admins));
     }
 }
