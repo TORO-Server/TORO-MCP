@@ -21,12 +21,31 @@ pub fn router(app: Arc<App>) -> Router {
 }
 
 async fn dispatch(State(app): State<Arc<App>>, request: Request) -> Response {
+    let mut res = answer(&app, request).await;
+    let headers = res.headers_mut();
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    // 利用者ごとに違う応答を Cloudflare にためさせない。ためてよいものは、自分で Cache-Control を付ける
+    headers
+        .entry(header::CACHE_CONTROL)
+        .or_insert(HeaderValue::from_static("no-store"));
+    res
+}
+
+async fn answer(app: &App, request: Request) -> Response {
+    let (parts, body) = request.into_parts();
+    // 稼働確認は、同時処理の枠を使わない (混んでいるだけで、止まっていると見なされないように)
+    if parts.uri.path() == "/healthz" {
+        let ctx = Ctx::new(&parts, Default::default(), &app.cfg);
+        return http::json(&ctx, &json!({ "ok": true }), 200);
+    }
     // 同時に処理する数を限り、ボディの分も含めてメモリの使用量に上限を設ける
     let Ok(_permit) = app.requests.try_acquire() else {
         return http::busy();
     };
 
-    let (parts, body) = request.into_parts();
     let wait = Duration::from_secs(app.cfg.body_read_timeout_secs);
     let body = match tokio::time::timeout(wait, to_bytes(body, MAX_BODY_BYTES)).await {
         Ok(Ok(body)) => body,
@@ -41,17 +60,7 @@ async fn dispatch(State(app): State<Arc<App>>, request: Request) -> Response {
     };
     let ctx = Ctx::new(&parts, body, &app.cfg);
 
-    let mut res = route(&app, &ctx).await;
-    let headers = res.headers_mut();
-    headers.insert(
-        header::X_CONTENT_TYPE_OPTIONS,
-        HeaderValue::from_static("nosniff"),
-    );
-    // 利用者ごとに違う応答を Cloudflare にためさせない。ためてよいものは、自分で Cache-Control を付ける
-    headers
-        .entry(header::CACHE_CONTROL)
-        .or_insert(HeaderValue::from_static("no-store"));
-    res
+    route(app, &ctx).await
 }
 
 async fn route(app: &App, ctx: &Ctx) -> Response {
@@ -61,9 +70,6 @@ async fn route(app: &App, ctx: &Ctx) -> Response {
 
     let path = ctx.path.as_str();
 
-    if path == "/healthz" {
-        return http::json(ctx, &json!({ "ok": true }), 200);
-    }
     if let Some(res) = static_files::serve(path) {
         return res;
     }
