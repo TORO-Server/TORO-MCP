@@ -28,6 +28,9 @@ pub struct Config {
     pub guard_url: Option<String>,
     /// 管理用のツールを使える Discord のロールの ID
     pub admin_roles: Vec<String>,
+
+    /// リクエストのボディを読み切るまで待つ秒数。遅い送信で同時処理の枠を埋めさせない
+    pub body_read_timeout_secs: u64,
 }
 
 fn optional(name: &str) -> Option<String> {
@@ -71,6 +74,7 @@ impl Config {
                 .map(|role| role.trim().to_string())
                 .filter(|role| !role.is_empty())
                 .collect(),
+            body_read_timeout_secs: 30,
         })
     }
 }

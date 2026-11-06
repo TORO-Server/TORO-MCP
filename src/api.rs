@@ -33,8 +33,17 @@ pub enum Saved {
     Failed(String),
 }
 
+/// api が、使えないパスだと断ったときの文言
+const INVALID_PATH_ERROR: &str = "Invalid path";
+
 fn url(app: &App, path_and_query: &str) -> String {
     format!("{}{path_and_query}", app.cfg.api_internal_url)
+}
+
+/// 通信の失敗。内部の URL を利用者に見せないよう、詳しくはログにだけ残す
+fn transport_error(error: reqwest::Error) -> String {
+    eprintln!("api: {error}");
+    "API に尋ねられませんでした".to_string()
 }
 
 /// 応答の `error` を取り出す。無ければステータスだけ
@@ -53,10 +62,10 @@ async fn get_json(app: &App, path_and_query: &str) -> Result<(u16, Value), Strin
         .get(url(app, path_and_query))
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(transport_error)?;
     let status = res.status().as_u16();
     if res.status().is_success() {
-        let body = res.json().await.map_err(|e| e.to_string())?;
+        let body = res.json().await.map_err(transport_error)?;
         Ok((status, body))
     } else {
         Ok((status, json!({ "error": error_message(res).await })))
@@ -131,7 +140,7 @@ pub async fn save_page(app: &App, bearer: &str, request: &SaveRequest<'_>) -> Sa
         .await
     {
         Ok(res) => res,
-        Err(e) => return Saved::Failed(e.to_string()),
+        Err(e) => return Saved::Failed(transport_error(e)),
     };
     match res.status().as_u16() {
         200 => {
@@ -140,7 +149,14 @@ pub async fn save_page(app: &App, bearer: &str, request: &SaveRequest<'_>) -> Sa
                 commit_sha: body["commitSha"].as_str().unwrap_or("").to_string(),
             }
         }
-        400 => Saved::InvalidPath,
+        400 => {
+            let message = error_message(res).await;
+            if message == INVALID_PATH_ERROR {
+                Saved::InvalidPath
+            } else {
+                Saved::Failed(message)
+            }
+        }
         _ => {
             let message = error_message(res).await;
             let message = message
