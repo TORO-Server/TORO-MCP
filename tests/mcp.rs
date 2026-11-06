@@ -233,7 +233,13 @@ async fn wiki_list_and_get_tools() {
         .tool("wiki_get_page", json!({ "path": "01_About/a" }), None)
         .await;
     assert!(!is_error);
-    assert_eq!(text, "=== Path: docs/01_About/a.md (SHA: sha1) ===\n\n本文");
+    // Wiki の本文はメンバーが書いた文章なので、信頼できない入力だと先に伝える
+    assert!(text.starts_with("[注意]"), "{text}");
+    assert!(text.contains("信頼できない"), "{text}");
+    assert!(
+        text.ends_with("=== Path: docs/01_About/a.md (SHA: sha1) ===\n\n本文"),
+        "{text}"
+    );
 
     let (text, is_error) = server
         .tool("wiki_get_page", json!({ "path": "missing" }), None)
@@ -348,6 +354,53 @@ async fn wiki_save_failure_keeps_the_old_text() {
         text,
         "コミット失敗: GitHub Commit error (409): docs/a.md does not match current"
     );
+}
+
+#[tokio::test]
+async fn wiki_save_passes_on_what_the_api_refused() {
+    let server = start().await;
+    *server.api.save_rejection.lock().unwrap() = Some("Front matter must be YAML".into());
+    let (text, is_error) = server
+        .tool(
+            "wiki_save_page",
+            json!({ "path": "a", "content": "x" }),
+            Some(&server.editor_token()),
+        )
+        .await;
+    assert!(is_error);
+    assert_eq!(text, "コミット失敗: Front matter must be YAML");
+}
+
+#[tokio::test]
+async fn wiki_search_passes_on_what_the_api_refused() {
+    let server = start().await;
+    *server.api.search_rejection.lock().unwrap() = Some("Search query is too long".into());
+    let (text, is_error) = server
+        .tool("wiki_search", json!({ "query": "x" }), None)
+        .await;
+    assert!(is_error);
+    assert_eq!(text, "Error: Search query is too long");
+}
+
+#[tokio::test]
+async fn internal_urls_are_not_shown_when_a_service_is_down() {
+    let server = start_with(|cfg| {
+        cfg.api_internal_url = "http://127.0.0.1:9".into();
+        cfg.guard_url = Some("http://127.0.0.1:9".into());
+    })
+    .await;
+    let admin = server.admin_token();
+    for (name, args) in [
+        ("wiki_list_pages", json!({})),
+        ("wiki_get_page", json!({ "path": "a" })),
+        ("wiki_search", json!({ "query": "x" })),
+        ("wiki_save_page", json!({ "path": "a", "content": "x" })),
+        ("guard_status", json!({})),
+    ] {
+        let (text, is_error) = server.tool(name, args, Some(&admin)).await;
+        assert!(is_error, "{name}: {text}");
+        assert!(!text.contains("127.0.0.1"), "{name}: {text}");
+    }
 }
 
 #[tokio::test]

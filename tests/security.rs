@@ -243,6 +243,64 @@ async fn responses_are_not_cacheable_unless_they_say_so() {
 }
 
 #[tokio::test]
+async fn health_checks_answer_even_when_every_slot_is_taken() {
+    use tokio::io::AsyncWriteExt;
+    let server = start().await;
+    let address = server.base.strip_prefix("http://").unwrap();
+    // ボディを送らないまま待つ接続で、同時処理の枠 (256) をすべて埋める
+    let mut streams = Vec::new();
+    for _ in 0..256 {
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        stream
+            .write_all(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 10\r\n\r\n")
+            .await
+            .unwrap();
+        streams.push(stream);
+    }
+    let busy = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let res = server.get("/nope").await;
+            if res.status() == 503 {
+                return res;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(busy.headers()[header::X_CONTENT_TYPE_OPTIONS], "nosniff");
+    assert_eq!(busy.headers()[header::CACHE_CONTROL], "no-store");
+
+    let health = server.get("/healthz").await;
+    assert_eq!(health.status(), 200);
+    assert_eq!(health.headers()[header::CACHE_CONTROL], "no-store");
+    drop(streams);
+}
+
+#[tokio::test]
+async fn slow_bodies_are_cut_off_and_the_slot_comes_back() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let server = start_with(|cfg| cfg.body_read_timeout_secs = 1).await;
+    let address = server.base.strip_prefix("http://").unwrap();
+    let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+    // 宣言した長さのボディを送らないまま待つ
+    stream
+        .write_all(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 10\r\n\r\n")
+        .await
+        .unwrap();
+    let mut head = [0u8; 12];
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        stream.read_exact(&mut head),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(&head, b"HTTP/1.1 408");
+    assert_eq!(server.get("/healthz").await.status(), 200);
+}
+
+#[tokio::test]
 async fn large_bodies_are_refused() {
     let server = start().await;
     let res = server

@@ -98,6 +98,10 @@ pub struct FakeApi {
     pub requests: Mutex<Vec<String>>,
     /// Some の間は、保存がこの文言で失敗する
     pub save_error: Mutex<Option<String>>,
+    /// Some の間は、保存をこの文言の 400 で断る
+    pub save_rejection: Mutex<Option<String>>,
+    /// Some の間は、検索をこの文言の 400 で断る
+    pub search_rejection: Mutex<Option<String>>,
     pub search_unavailable: AtomicBool,
     /// Some の間は、Minecraft サーバーが動いている
     pub status: Mutex<Option<Value>>,
@@ -182,6 +186,9 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
                     if normalize(payload["path"].as_str().unwrap_or("")).is_none() {
                         return json_response(400, json!({ "error": "Invalid path" }));
                     }
+                    if let Some(message) = state.save_rejection.lock().unwrap().clone() {
+                        return json_response(400, json!({ "error": message }));
+                    }
                     if let Some(message) = state.save_error.lock().unwrap().clone() {
                         return json_response(
                             500,
@@ -196,6 +203,9 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
                 (Method::GET, "/docs/search") => {
                     if state.search_unavailable.load(Ordering::SeqCst) {
                         return json_response(503, json!({ "error": "Search unavailable" }));
+                    }
+                    if let Some(message) = state.search_rejection.lock().unwrap().clone() {
+                        return json_response(400, json!({ "error": message }));
                     }
                     let query = query_of(&parts, "q").unwrap_or_default();
                     let lowercase = query.to_lowercase();
@@ -359,6 +369,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
         api_internal_url: start_fake_api(api.clone()).await,
         guard_url: Some(start_fake_guard(guard.clone()).await),
         admin_roles: vec![ADMIN_ROLE.into()],
+        body_read_timeout_secs: 30,
     };
     customize(&mut cfg);
 
