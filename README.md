@@ -18,7 +18,6 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 ```
 
 - どのホスト名で受けても、同じ MCP サーバーとして答えます (ホストごとの振り分けはありません)
-- 構成: Cloudflare Tunnel の公開ホスト名 `mcp.torosaba.net` → `http://toro-mcp:8080`
 - `AUTH_INTERNAL_URL` と `API_INTERNAL_URL` の先に、内部のネットワークで届く必要があります。どちらも公開しません
 
 ## 窓口
