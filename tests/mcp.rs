@@ -386,7 +386,7 @@ async fn wiki_search_passes_on_what_the_api_refused() {
 async fn internal_urls_are_not_shown_when_a_service_is_down() {
     let server = start_with(|cfg| {
         cfg.api_internal_url = "http://127.0.0.1:9".into();
-        cfg.guard_url = Some("http://127.0.0.1:9".into());
+        cfg.crime_buster_url = Some("http://127.0.0.1:9".into());
     })
     .await;
     let admin = server.admin_token();
@@ -395,7 +395,7 @@ async fn internal_urls_are_not_shown_when_a_service_is_down() {
         ("wiki_get_page", json!({ "path": "a" })),
         ("wiki_search", json!({ "query": "x" })),
         ("wiki_save_page", json!({ "path": "a", "content": "x" })),
-        ("guard_status", json!({})),
+        ("crime_buster_status", json!({})),
     ] {
         let (text, is_error) = server.tool(name, args, Some(&admin)).await;
         assert!(is_error, "{name}: {text}");
