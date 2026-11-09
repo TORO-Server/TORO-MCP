@@ -241,9 +241,9 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
 pub const ADMIN_ROLE: &str = "497387545928138762";
 pub const PNG_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nfake";
 
-/// toro-guard の窓口に届いた依頼
+/// crime-buster の窓口に届いた依頼
 #[derive(Clone, Debug)]
-pub struct GuardCall {
+pub struct CrimeBusterCall {
     pub method: String,
     /// パスと、? 以降
     pub target: String,
@@ -251,13 +251,13 @@ pub struct GuardCall {
     pub body: Value,
 }
 
-/// 届いた依頼を覚えて、決まった答えを返す toro-guard の窓口
+/// 届いた依頼を覚えて、決まった答えを返す crime-buster の窓口
 #[derive(Default)]
-pub struct FakeGuard {
-    pub calls: Mutex<Vec<GuardCall>>,
+pub struct FakeCrimeBuster {
+    pub calls: Mutex<Vec<CrimeBusterCall>>,
 }
 
-async fn start_fake_guard(state: Arc<FakeGuard>) -> String {
+async fn start_fake_crime_buster(state: Arc<FakeCrimeBuster>) -> String {
     let router = Router::new().fallback(move |req: Request| {
         let state = state.clone();
         async move {
@@ -271,7 +271,7 @@ async fn start_fake_guard(state: Arc<FakeGuard>) -> String {
                     .unwrap_or("")
                     .to_string()
             };
-            let call = GuardCall {
+            let call = CrimeBusterCall {
                 method: parts.method.to_string(),
                 target: parts
                     .uri
@@ -327,7 +327,7 @@ pub struct TestServer {
     pub client: reqwest::Client,
     pub auth: Arc<FakeAuth>,
     pub api: Arc<FakeApi>,
-    pub guard: Arc<FakeGuard>,
+    pub crime_buster: Arc<FakeCrimeBuster>,
 }
 
 pub async fn start() -> TestServer {
@@ -340,7 +340,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
 
     let auth = Arc::new(FakeAuth::default());
     let api = Arc::new(FakeApi::default());
-    let guard = Arc::new(FakeGuard::default());
+    let crime_buster = Arc::new(FakeCrimeBuster::default());
     api.docs.lock().unwrap().extend([
         (
             "01_About/a.md".to_string(),
@@ -367,7 +367,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
         cors_origins: vec![WIKI_ORIGIN.into()],
         auth_internal_url: start_fake_auth(auth.clone()).await,
         api_internal_url: start_fake_api(api.clone()).await,
-        guard_url: Some(start_fake_guard(guard.clone()).await),
+        crime_buster_url: Some(start_fake_crime_buster(crime_buster.clone()).await),
         admin_roles: vec![ADMIN_ROLE.into()],
         body_read_timeout_secs: 30,
     };
@@ -384,7 +384,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
             .unwrap(),
         auth,
         api,
-        guard,
+        crime_buster,
     }
 }
 

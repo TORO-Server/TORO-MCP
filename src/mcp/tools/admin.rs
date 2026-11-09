@@ -1,9 +1,9 @@
-//! 荒らし対策 (toro-guard の窓口) と Discord のツール。Admin 以上の人の頼みを取り次ぐ
+//! 荒らし対策 (crime-buster の窓口) と Discord のツール。Admin 以上の人の頼みを取り次ぐ
 //!
-//! 窓口 (toro-guard) には、共有の秘密を使わず、**呼び出した利用者の Bearer トークンをそのまま渡す** (OAuth 2.0)。
+//! 窓口 (crime-buster) には、共有の秘密を使わず、**呼び出した利用者の Bearer トークンをそのまま渡す** (OAuth 2.0)。
 //! 窓口が auth の `/introspect` に尋ね、いまの Discord のロールが Admin 以上かを、自分で確かめる (ここの判断は、見せるかどうかだけ)。
 //! 窓口の audit.jsonl には、トークンの持ち主が残る。Discord のトークンは、このサービスには無い
-//! (toro-guard が DiscordSRV の設定から読み、Discord-MCP に渡す)。
+//! (crime-buster が DiscordSRV の設定から読み、Discord-MCP に渡す)。
 
 use std::time::Duration;
 
@@ -17,19 +17,19 @@ use crate::util::encode_uri_component;
 
 /// 管理用のツールの名前 (定義は assets/mcp/tools_admin.json)
 pub const TOOLS: [&str; 15] = [
-    "guard_status",
-    "guard_list_incidents",
-    "guard_get_incident",
-    "guard_get_image",
-    "guard_report_incident",
-    "guard_rollback",
-    "guard_dismiss_incident",
-    "guard_player_activity",
-    "guard_recent_chat",
-    "guard_mute_player",
-    "guard_kick_player",
-    "guard_map_screenshot",
-    "guard_get_screenshot",
+    "crime_buster_status",
+    "crime_buster_list_incidents",
+    "crime_buster_get_incident",
+    "crime_buster_get_image",
+    "crime_buster_report_incident",
+    "crime_buster_rollback",
+    "crime_buster_dismiss_incident",
+    "crime_buster_player_activity",
+    "crime_buster_recent_chat",
+    "crime_buster_mute_player",
+    "crime_buster_kick_player",
+    "crime_buster_map_screenshot",
+    "crime_buster_get_screenshot",
     "discord_search_tools",
     "discord_call_tool",
 ];
@@ -78,7 +78,7 @@ async fn ask(
     body: Option<Value>,
     timeout: Duration,
 ) -> Result<Reply, String> {
-    let Some(base) = app.cfg.guard_url.as_deref() else {
+    let Some(base) = app.cfg.crime_buster_url.as_deref() else {
         return Err("荒らし対策の窓口が設定されていません".into());
     };
     let mut request = app
@@ -91,7 +91,7 @@ async fn ask(
     }
     // 内部の URL は利用者に見せない。詳しくはログにだけ残す
     let res = request.send().await.map_err(|e| {
-        eprintln!("guard: {e}");
+        eprintln!("crime-buster: {e}");
         "荒らし対策の窓口につなげません".to_string()
     })?;
     let status = res.status();
@@ -106,7 +106,7 @@ async fn ask(
             .await
             .map(|b| Reply::Png(b.to_vec()))
             .map_err(|e| {
-                eprintln!("guard: {e}");
+                eprintln!("crime-buster: {e}");
                 "荒らし対策の窓口から画像を受け取れません".to_string()
             });
     }
@@ -178,13 +178,14 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
     let player = arg(args, "player");
     let id_ok = valid_id(id);
     let player_ok = valid_player(player);
-    let bad_id =
-        || failure("事件の ID が正しくありません (guard_list_incidents の id を使ってください)");
+    let bad_id = || {
+        failure("事件の ID が正しくありません (crime_buster_list_incidents の id を使ってください)")
+    };
     let bad_player = || failure("プレイヤー名が正しくありません (英数字と _ . で 32 文字まで)");
 
     match name {
-        "guard_status" => render(get("/v1/status".into()).await, false),
-        "guard_list_incidents" => {
+        "crime_buster_status" => render(get("/v1/status".into()).await, false),
+        "crime_buster_list_incidents" => {
             let state = optional_text(args, "state");
             let limit = number(args, "limit").map(|n| (n as i64).to_string());
             render(
@@ -196,8 +197,10 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
                 true,
             )
         }
-        "guard_get_incident" if id_ok => render(get(format!("/v1/incidents/{id}")).await, true),
-        "guard_get_image" if id_ok => {
+        "crime_buster_get_incident" if id_ok => {
+            render(get(format!("/v1/incidents/{id}")).await, true)
+        }
+        "crime_buster_get_image" if id_ok => {
             let image = arg(args, "name");
             if !valid_id(image) {
                 return failure("画像の名前が正しくありません (事件の images にあるもの)");
@@ -208,7 +211,7 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
                 Err(message) => failure(&message),
             }
         }
-        "guard_report_incident" if id_ok => render(
+        "crime_buster_report_incident" if id_ok => render(
             post(
                 format!("/v1/incidents/{id}/report"),
                 json!({ "note": arg(args, "note") }),
@@ -216,11 +219,11 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
             .await,
             false,
         ),
-        "guard_rollback" if id_ok => render(
+        "crime_buster_rollback" if id_ok => render(
             post(format!("/v1/incidents/{id}/rollback"), json!({})).await,
             false,
         ),
-        "guard_dismiss_incident" if id_ok => render(
+        "crime_buster_dismiss_incident" if id_ok => render(
             post(
                 format!("/v1/incidents/{id}/dismiss"),
                 json!({ "reason": arg(args, "reason") }),
@@ -228,7 +231,7 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
             .await,
             false,
         ),
-        "guard_player_activity" if player_ok => {
+        "crime_buster_player_activity" if player_ok => {
             let hours = number(args, "hours").map(|n| n.to_string());
             render(
                 get(format!(
@@ -239,7 +242,7 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
                 true,
             )
         }
-        "guard_recent_chat" => {
+        "crime_buster_recent_chat" => {
             let who_filter = optional_text(args, "player");
             if who_filter.as_deref().is_some_and(|p| !valid_player(p)) {
                 return bad_player();
@@ -254,7 +257,7 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
                 true,
             )
         }
-        "guard_mute_player" if player_ok => render(
+        "crime_buster_mute_player" if player_ok => render(
             post(
                 format!("/v1/players/{player}/mute"),
                 json!({ "reason": arg(args, "reason") }),
@@ -262,7 +265,7 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
             .await,
             false,
         ),
-        "guard_kick_player" if player_ok => render(
+        "crime_buster_kick_player" if player_ok => render(
             post(
                 format!("/v1/players/{player}/kick"),
                 json!({ "reason": arg(args, "reason") }),
@@ -270,7 +273,7 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
             .await,
             false,
         ),
-        "guard_map_screenshot" => {
+        "crime_buster_map_screenshot" => {
             let (Some(x), Some(z)) = (number(args, "x"), number(args, "z")) else {
                 return failure("x と z (数) が要ります");
             };
@@ -287,10 +290,10 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
             // 撮影は 1 分ほどかかる (コネクターの 1 回の呼び出しは 45 秒で切れる) ので、始めるだけにして、job を返す
             render(post("/v1/screenshot".into(), body).await, false)
         }
-        "guard_get_screenshot" => {
+        "crime_buster_get_screenshot" => {
             let job = arg(args, "job");
             if !valid_id(job) {
-                return failure("job が正しくありません (guard_map_screenshot が返した値)");
+                return failure("job が正しくありません (crime_buster_map_screenshot が返した値)");
             }
             match get(format!("/v1/screenshots/{job}")).await {
                 Ok(Reply::Png(png)) => image_result(&png, &format!("BlueMap (job {job})")),
@@ -322,12 +325,14 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
             }
             render(post("/v1/discord/call".into(), body).await, true)
         }
-        "guard_get_incident"
-        | "guard_get_image"
-        | "guard_report_incident"
-        | "guard_rollback"
-        | "guard_dismiss_incident" => bad_id(),
-        "guard_player_activity" | "guard_mute_player" | "guard_kick_player" => bad_player(),
+        "crime_buster_get_incident"
+        | "crime_buster_get_image"
+        | "crime_buster_report_incident"
+        | "crime_buster_rollback"
+        | "crime_buster_dismiss_incident" => bad_id(),
+        "crime_buster_player_activity"
+        | "crime_buster_mute_player"
+        | "crime_buster_kick_player" => bad_player(),
         _ => failure(&format!("不明なツールです: {name}")),
     }
 }

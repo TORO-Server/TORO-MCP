@@ -56,24 +56,24 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 
 ### 管理用のツール (Admin 以上だけ)
 
-荒らし対策 (toro-guard) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`GUARD_CONTROL_URL` が無いときは、Admin にも出しません。
+荒らし対策 (crime-buster) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`CRIMEBUSTER_CONTROL_URL` が無いときは、Admin にも出しません。
 
-| ツール | できること | 頼む先 (toro-guard の窓口) |
+| ツール | できること | 頼む先 (crime-buster の窓口) |
 | --- | --- | --- |
-| `guard_status` `guard_list_incidents` `guard_get_incident` `guard_get_image` | 状態・事件の一覧・報告文・証拠の画像 (MCP の `image` コンテンツ) | `GET /v1/status` `/v1/incidents` `/v1/incidents/{id}` `…/images/{name}` |
-| `guard_report_incident` `guard_rollback` `guard_dismiss_incident` | 通報 / ロールバック (裏で動く) / 却下 | `POST /v1/incidents/{id}/report` `…/rollback` `…/dismiss` |
-| `guard_player_activity` `guard_recent_chat` | 最近のブロックの変更・コマンド・発言 | `GET /v1/players/{name}/activity` `/v1/chat` |
-| `guard_mute_player` `guard_kick_player` | ミュート / キック | `POST /v1/players/{name}/mute` `…/kick` |
-| `guard_map_screenshot` `guard_get_screenshot` | BlueMap の撮影を始める (job) / 撮れた画像を取る | `POST /v1/screenshot` `GET /v1/screenshots/{job}` |
+| `crime_buster_status` `crime_buster_list_incidents` `crime_buster_get_incident` `crime_buster_get_image` | 状態・事件の一覧・報告文・証拠の画像 (MCP の `image` コンテンツ) | `GET /v1/status` `/v1/incidents` `/v1/incidents/{id}` `…/images/{name}` |
+| `crime_buster_report_incident` `crime_buster_rollback` `crime_buster_dismiss_incident` | 通報 / ロールバック (裏で動く) / 却下 | `POST /v1/incidents/{id}/report` `…/rollback` `…/dismiss` |
+| `crime_buster_player_activity` `crime_buster_recent_chat` | 最近のブロックの変更・コマンド・発言 | `GET /v1/players/{name}/activity` `/v1/chat` |
+| `crime_buster_mute_player` `crime_buster_kick_player` | ミュート / キック | `POST /v1/players/{name}/mute` `…/kick` |
+| `crime_buster_map_screenshot` `crime_buster_get_screenshot` | BlueMap の撮影を始める (job) / 撮れた画像を取る | `POST /v1/screenshot` `GET /v1/screenshots/{job}` |
 | `discord_search_tools` `discord_call_tool` | TORO の Discord ボットで、許可した操作 (読む・投稿・タグ付け) | `GET /v1/discord/tools` `POST /v1/discord/call` |
 
 - **ロールは、auth の確認の結果 (`roles_source` が `live`) だけを信じる。** auth は `/introspect` のたびに、トークンの値ではなく、いまの Discord のロールを返す (60 秒だけ覚える)。OAuth のアクセストークン (ロールが空) も 90 日トークン (ロールが古くなる) も、同じに扱え、ロールを外せば、最長 60 秒で使えなくなる。auth がロールを確かめられていないとき (`token` / `unavailable`、または古い auth) は、Admin と認めない。
 - **OAuth のトークンは、同意した scope の中だけ。** 読むだけに同意したトークンでは、Admin の人でも管理用のツールは使えない。`mcp` を求める同意画面には、Admin 以上の人が何を許すことになるかが出る (TORO-Auth)。
-- **窓口には、共有の秘密ではなく、呼び出した利用者のトークンをそのまま渡す** (OAuth 2.0)。窓口 (toro-guard) が auth に尋ねて、Admin かを自分で確かめ、トークンの持ち主を `audit.jsonl` に残す。ここの判断は、ツールを見せるかどうかだけ。Discord のトークンは、このサービスには無い (toro-guard が DiscordSRV の設定から読む)。
+- **窓口には、共有の秘密ではなく、呼び出した利用者のトークンをそのまま渡す** (OAuth 2.0)。窓口 (crime-buster) が auth に尋ねて、Admin かを自分で確かめ、トークンの持ち主を `audit.jsonl` に残す。ここの判断は、ツールを見せるかどうかだけ。Discord のトークンは、このサービスには無い (crime-buster が DiscordSRV の設定から読む)。
 - **URL に入れる値は、検査してから。** 事件の ID は `[A-Za-z0-9_.-]` だけ (`..` を含めない)、プレイヤー名は `[A-Za-z0-9_.]` の 32 文字まで。
 - **利用者が書いた文章を返すツールは、先頭に「信頼できない入力」の注意を付ける。** AI が、発言や Discord の本文の中の指示に従わないようにするため。
 - 窓口への 1 回の待ちは 30 秒 (Muse のコネクターの 1 回の呼び出しが 45 秒で切れるため)。撮影は、始める・取るの 2 回に分けている。
-- つなぎ方 (Muse): toro-guard の `docs/MUSE.md`。
+- つなぎ方 (Muse): crime-buster の `docs/MUSE.md`。
 
 ## 機能ごとの置き場所
 
@@ -106,7 +106,7 @@ cargo test
 | --- | --- | --- |
 | `AUTH_INTERNAL_URL` | `http://toro-auth:8081` | トークンの確認を頼む先 |
 | `API_INTERNAL_URL` | `http://toro-api:8080` | Wiki と稼働状態のデータを頼む先 |
-| `GUARD_CONTROL_URL` | (空) | 荒らし対策の窓口 (内部のネットワークだけ。例 `http://toro-guard:8090`)。空なら、管理用のツールは出さない |
+| `CRIMEBUSTER_CONTROL_URL` | (空) | 荒らし対策の窓口 (内部のネットワークだけ。例 `http://crime-buster:8090`)。空なら、管理用のツールは出さない |
 | `ADMIN_ROLE_IDS` | Owner と Admin のロール ID | 管理用のツールを使える Discord のロール (カンマ区切り) |
 | `PUBLIC_AUTH_URL` / `PUBLIC_API_URL` / `PUBLIC_MCP_URL` / `PUBLIC_WIKI_URL` | 本番の URL | 利用者に見せる URL |
 | `CORS_ORIGINS` | `https://wiki.torosaba.net` | Cookie 付きで呼べる Origin (カンマ区切り) |

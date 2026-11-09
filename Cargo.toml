@@ -1,6 +1,6 @@
 [package]
 name = "toro-mcp"
-version = "2.0.1"
+version = "2.1.0"
 edition = "2024"
 description = "TORO Server の AI コネクタ (Remote MCP サーバー)"
 publish = false

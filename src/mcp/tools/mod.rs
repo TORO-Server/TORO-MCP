@@ -3,7 +3,7 @@
 //! - `wiki`: wiki_list_pages / wiki_get_page / wiki_save_page / wiki_search
 //! - `server`: server_get_status / server_get_info
 //! - `identity`: auth_get_identity
-//! - `admin`: 荒らし対策 (guard_*) と Discord (discord_*)。Admin 以上のロールを持つ人にだけ見せる。
+//! - `admin`: 荒らし対策 (crime_buster_*) と Discord (discord_*)。Admin 以上のロールを持つ人にだけ見せる。
 //!   定義は assets/mcp/tools_admin.json
 
 mod admin;
@@ -42,7 +42,7 @@ pub fn definitions() -> &'static Value {
 
 /// 管理用のツールを見せてよいか。窓口が設定されていて、呼び出し元が Admin 以上で、トークンがそこまで許されているとき
 fn admin_allowed(app: &App, session: Option<&Session>) -> bool {
-    app.cfg.guard_url.is_some()
+    app.cfg.crime_buster_url.is_some()
         && session.is_some_and(|s| s.can_use_admin_tools(&app.cfg.admin_roles))
 }
 
