@@ -110,7 +110,11 @@ async fn oauth_tokens_need_the_mcp_scope_for_admin_tools() {
             7,
             "{scope:?}"
         );
-        for name in ["crime_buster_status", "crime_buster_rollback", "discord_call_tool"] {
+        for name in [
+            "crime_buster_status",
+            "crime_buster_rollback",
+            "discord_call_tool",
+        ] {
             let (text, is_error) = server
                 .tool(
                     name,
@@ -132,7 +136,9 @@ async fn oauth_tokens_need_the_mcp_scope_for_admin_tools() {
             22,
             "{scope:?}"
         );
-        let (text, is_error) = server.tool("crime_buster_status", json!({}), Some(&token)).await;
+        let (text, is_error) = server
+            .tool("crime_buster_status", json!({}), Some(&token))
+            .await;
         assert!(!is_error, "{scope:?}: {text}");
     }
 
@@ -148,7 +154,9 @@ async fn oauth_tokens_need_the_mcp_scope_for_admin_tools() {
 async fn status_goes_to_the_crime_buster_with_the_callers_own_token() {
     let server = start().await;
     let admin = server.admin_token();
-    let (text, is_error) = server.tool("crime_buster_status", json!({}), Some(&admin)).await;
+    let (text, is_error) = server
+        .tool("crime_buster_status", json!({}), Some(&admin))
+        .await;
     assert!(!is_error, "{text}");
     assert!(text.contains("review") && text.contains("pending"));
     let calls = server.crime_buster.calls.lock().unwrap();
@@ -296,7 +304,14 @@ async fn activity_and_chat_are_marked_untrusted() {
     assert!(!is_error);
     assert!(text.starts_with("[注意]"), "{text}");
     assert_eq!(
-        server.crime_buster.calls.lock().unwrap().last().unwrap().target,
+        server
+            .crime_buster
+            .calls
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .target,
         "/v1/players/fuuty119/activity?hours=12"
     );
     let (text, _) = server
@@ -308,7 +323,14 @@ async fn activity_and_chat_are_marked_untrusted() {
         .await;
     assert!(text.starts_with("[注意]"));
     assert_eq!(
-        server.crime_buster.calls.lock().unwrap().last().unwrap().target,
+        server
+            .crime_buster
+            .calls
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .target,
         "/v1/chat?minutes=45&player=a.b"
     );
 }
@@ -369,7 +391,11 @@ async fn screenshots_are_started_then_fetched() {
         );
     }
     let (_, is_error) = server
-        .tool("crime_buster_map_screenshot", json!({ "x": 1 }), Some(&admin))
+        .tool(
+            "crime_buster_map_screenshot",
+            json!({ "x": 1 }),
+            Some(&admin),
+        )
         .await;
     assert!(is_error, "z is required");
 
@@ -385,7 +411,11 @@ async fn screenshots_are_started_then_fetched() {
     assert!(text.contains("pending"), "{text}");
     for bad in ["", "../x", "a/b"] {
         let (_, is_error) = server
-            .tool("crime_buster_get_screenshot", json!({ "job": bad }), Some(&admin))
+            .tool(
+                "crime_buster_get_screenshot",
+                json!({ "job": bad }),
+                Some(&admin),
+            )
             .await;
         assert!(is_error, "{bad:?}");
     }
@@ -438,7 +468,14 @@ async fn discord_calls_are_forwarded() {
         .await;
     assert!(!is_error);
     assert_eq!(
-        server.crime_buster.calls.lock().unwrap().last().unwrap().target,
+        server
+            .crime_buster
+            .calls
+            .lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .target,
         "/v1/discord/tools?query=mess%20age"
     );
 }
@@ -463,7 +500,9 @@ async fn crime_buster_errors_are_shown_as_text() {
     // 窓口が落ちている
     let server = start_with(|cfg| cfg.crime_buster_url = Some("http://127.0.0.1:9".into())).await;
     let admin = server.admin_token();
-    let (text, is_error) = server.tool("crime_buster_status", json!({}), Some(&admin)).await;
+    let (text, is_error) = server
+        .tool("crime_buster_status", json!({}), Some(&admin))
+        .await;
     assert!(is_error);
     assert!(text.contains("つなげません"), "{text}");
 
@@ -500,7 +539,9 @@ async fn roles_that_auth_did_not_confirm_are_not_trusted() {
     let old_auth = server.token(json!({ "id": "52", "username": "old", "roles": [ADMIN_ROLE] }));
     for token in [&stale, &unavailable, &old_auth] {
         assert_eq!(tool_names(&server, Some(token)).await.len(), 7);
-        let (_, is_error) = server.tool("crime_buster_status", json!({}), Some(token)).await;
+        let (_, is_error) = server
+            .tool("crime_buster_status", json!({}), Some(token))
+            .await;
         assert!(is_error);
     }
     assert!(server.crime_buster.calls.lock().unwrap().is_empty());

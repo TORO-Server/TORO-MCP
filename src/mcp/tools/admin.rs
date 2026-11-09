@@ -178,8 +178,9 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
     let player = arg(args, "player");
     let id_ok = valid_id(id);
     let player_ok = valid_player(player);
-    let bad_id =
-        || failure("事件の ID が正しくありません (crime_buster_list_incidents の id を使ってください)");
+    let bad_id = || {
+        failure("事件の ID が正しくありません (crime_buster_list_incidents の id を使ってください)")
+    };
     let bad_player = || failure("プレイヤー名が正しくありません (英数字と _ . で 32 文字まで)");
 
     match name {
@@ -196,7 +197,9 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
                 true,
             )
         }
-        "crime_buster_get_incident" if id_ok => render(get(format!("/v1/incidents/{id}")).await, true),
+        "crime_buster_get_incident" if id_ok => {
+            render(get(format!("/v1/incidents/{id}")).await, true)
+        }
         "crime_buster_get_image" if id_ok => {
             let image = arg(args, "name");
             if !valid_id(image) {
@@ -327,7 +330,9 @@ pub async fn call(app: &App, name: &str, args: &Value, who: &Caller<'_>) -> Valu
         | "crime_buster_report_incident"
         | "crime_buster_rollback"
         | "crime_buster_dismiss_incident" => bad_id(),
-        "crime_buster_player_activity" | "crime_buster_mute_player" | "crime_buster_kick_player" => bad_player(),
+        "crime_buster_player_activity"
+        | "crime_buster_mute_player"
+        | "crime_buster_kick_player" => bad_player(),
         _ => failure(&format!("不明なツールです: {name}")),
     }
 }
