@@ -40,7 +40,7 @@ pub fn definitions() -> &'static Value {
     &DEFINITIONS
 }
 
-/// 管理用のツールを見せてよいか。窓口が設定されていて、呼び出し元が Admin 以上で、トークンがそこまで許されているとき
+/// 管理用のツールを見せてよいか。コネクタが設定されていて、呼び出し元が Admin 以上で、トークンがそこまで許されているとき
 fn admin_allowed(app: &App, session: Option<&Session>) -> bool {
     app.cfg.crime_buster_url.is_some()
         && session.is_some_and(|s| s.can_use_admin_tools(&app.cfg.admin_roles))

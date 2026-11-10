@@ -56,9 +56,9 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 
 ### 管理用のツール (Admin 以上だけ)
 
-荒らし対策 (crime-buster) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`CRIMEBUSTER_CONTROL_URL` が無いときは、Admin にも出しません。
+荒らし対策 (crime-buster) と Discord のツールです。定義は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs`。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`CRIMEBUSTER_CONNECTOR_URL` が無いときは、Admin にも出しません。
 
-| ツール | できること | 頼む先 (crime-buster の窓口) |
+| ツール | できること | 頼む先 (crime-buster のコネクタ) |
 | --- | --- | --- |
 | `crime_buster_status` `crime_buster_list_incidents` `crime_buster_get_incident` `crime_buster_get_image` | 状態・事件の一覧・報告文・証拠の画像 (MCP の `image` コンテンツ) | `GET /v1/status` `/v1/incidents` `/v1/incidents/{id}` `…/images/{name}` |
 | `crime_buster_report_incident` `crime_buster_rollback` `crime_buster_dismiss_incident` | 通報 / ロールバック (裏で動く) / 却下 | `POST /v1/incidents/{id}/report` `…/rollback` `…/dismiss` |
@@ -69,10 +69,10 @@ AI クライアント → Cloudflare → cloudflared ─→ toro-mcp:8080 ─┬
 
 - **ロールは、auth の確認の結果 (`roles_source` が `live`) だけを信じる。** auth は `/introspect` のたびに、トークンの値ではなく、いまの Discord のロールを返す (60 秒だけ覚える)。OAuth のアクセストークン (ロールが空) も 90 日トークン (ロールが古くなる) も、同じに扱え、ロールを外せば、最長 60 秒で使えなくなる。auth がロールを確かめられていないとき (`token` / `unavailable`、または古い auth) は、Admin と認めない。
 - **OAuth のトークンは、同意した scope の中だけ。** 読むだけに同意したトークンでは、Admin の人でも管理用のツールは使えない。`mcp` を求める同意画面には、Admin 以上の人が何を許すことになるかが出る (TORO-Auth)。
-- **窓口には、共有の秘密ではなく、呼び出した利用者のトークンをそのまま渡す** (OAuth 2.0)。窓口 (crime-buster) が auth に尋ねて、Admin かを自分で確かめ、トークンの持ち主を `audit.jsonl` に残す。ここの判断は、ツールを見せるかどうかだけ。Discord のトークンは、このサービスには無い (crime-buster が DiscordSRV の設定から読む)。
+- **コネクタには、共有の秘密ではなく、呼び出した利用者のトークンをそのまま渡す** (OAuth 2.0)。コネクタ (crime-buster) が auth に尋ねて、Admin かを自分で確かめ、トークンの持ち主を `audit.jsonl` に残す。ここの判断は、ツールを見せるかどうかだけ。Discord のトークンは、このサービスには無い (crime-buster が DiscordSRV の設定から読む)。
 - **URL に入れる値は、検査してから。** 事件の ID は `[A-Za-z0-9_.-]` だけ (`..` を含めない)、プレイヤー名は `[A-Za-z0-9_.]` の 32 文字まで。
 - **利用者が書いた文章を返すツールは、先頭に「信頼できない入力」の注意を付ける。** AI が、発言や Discord の本文の中の指示に従わないようにするため。
-- 窓口への 1 回の待ちは 30 秒 (Muse のコネクターの 1 回の呼び出しが 45 秒で切れるため)。撮影は、始める・取るの 2 回に分けている。
+- コネクタへの 1 回の待ちは 30 秒 (Muse のコネクターの 1 回の呼び出しが 45 秒で切れるため)。撮影は、始める・取るの 2 回に分けている。
 - つなぎ方 (Muse): crime-buster の `docs/MUSE.md`。
 
 ## 機能ごとの置き場所
@@ -106,7 +106,7 @@ cargo test
 | --- | --- | --- |
 | `AUTH_INTERNAL_URL` | `http://toro-auth:8081` | トークンの確認を頼む先 |
 | `API_INTERNAL_URL` | `http://toro-api:8080` | Wiki と稼働状態のデータを頼む先 |
-| `CRIMEBUSTER_CONTROL_URL` | (空) | 荒らし対策の窓口 (内部のネットワークだけ。例 `http://crime-buster:8090`)。空なら、管理用のツールは出さない |
+| `CRIMEBUSTER_CONNECTOR_URL` | (空) | 荒らし対策のコネクタ (内部のネットワークだけ。例 `http://crime-buster:8090`)。空なら、管理用のツールは出さない。旧名の `CRIMEBUSTER_CONTROL_URL` も受理する (新名が優先) |
 | `ADMIN_ROLE_IDS` | Owner と Admin のロール ID | 管理用のツールを使える Discord のロール (カンマ区切り) |
 | `PUBLIC_AUTH_URL` / `PUBLIC_API_URL` / `PUBLIC_MCP_URL` / `PUBLIC_WIKI_URL` | 本番の URL | 利用者に見せる URL |
 | `CORS_ORIGINS` | `https://wiki.torosaba.net` | Cookie 付きで呼べる Origin (カンマ区切り) |
@@ -129,7 +129,7 @@ GitHub Actions が、試験に通ったものだけを GHCR (`ghcr.io/toro-serve
 - **無効なトークンを匿名として扱わない。** 401 を返して再認可を促す。auth の障害は 503 で、再認可させない
 - **scope を守る。** Wiki の変更には `write` か `mcp`、管理用のツールには `mcp` が要る。利用者のトークンは保存のときだけ api に渡す
 - **利用者が書いた文章は、信頼できない入力として返す。** プレイヤーの発言、Discord の本文、Wiki の本文には、先頭に注意を付ける
-- **内部の URL を見せない。** api や窓口につながらなかった理由はログにだけ残す
+- **内部の URL を見せない。** api や crime-buster につながらなかった理由はログにだけ残す
 - **画像は埋め込む。** `serverInfo.icons` は小さな `data:` URI 1 つだけ (外部の画像を読めないクライアントがある)
 - **応答は `no-store`。** 利用者ごとに違う応答を Cloudflare にためさせない (アイコンだけが例外)
 - 同時に処理する数 (256)、ボディの大きさ (2 MiB)、ボディを読み切るまでの時間 (30 秒) に上限がある。稼働確認 (`/healthz`) は、同時処理の枠を使わない
