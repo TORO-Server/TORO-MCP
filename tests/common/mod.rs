@@ -241,7 +241,7 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
 pub const ADMIN_ROLE: &str = "497387545928138762";
 pub const PNG_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nfake";
 
-/// crime-buster の窓口に届いた依頼
+/// crime-buster のコネクタに届いた依頼
 #[derive(Clone, Debug)]
 pub struct CrimeBusterCall {
     pub method: String,
@@ -251,7 +251,7 @@ pub struct CrimeBusterCall {
     pub body: Value,
 }
 
-/// 届いた依頼を覚えて、決まった答えを返す crime-buster の窓口
+/// 届いた依頼を覚えて、決まった答えを返す crime-buster のコネクタ
 #[derive(Default)]
 pub struct FakeCrimeBuster {
     pub calls: Mutex<Vec<CrimeBusterCall>>,
@@ -282,7 +282,7 @@ async fn start_fake_crime_buster(state: Arc<FakeCrimeBuster>) -> String {
                 body: serde_json::from_slice(&body).unwrap_or(Value::Null),
             };
             state.calls.lock().unwrap().push(call.clone());
-            // 本物の窓口は、利用者のトークンを auth に尋ねて、Admin かを確かめる。ここでは、トークンの名前で決める
+            // 本物のコネクタは、利用者のトークンを auth に尋ねて、Admin かを確かめる。ここでは、トークンの名前で決める
             match call.authorization.as_str() {
                 "Bearer tok-nobody" => {
                     return json_response(

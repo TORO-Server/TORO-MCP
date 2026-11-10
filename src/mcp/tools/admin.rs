@@ -1,8 +1,8 @@
-//! 荒らし対策 (crime-buster の窓口) と Discord のツール。Admin 以上の人の頼みを取り次ぐ
+//! 荒らし対策 (crime-buster のコネクタ) と Discord のツール。Admin 以上の人の頼みを取り次ぐ
 //!
-//! 窓口 (crime-buster) には、共有の秘密を使わず、**呼び出した利用者の Bearer トークンをそのまま渡す** (OAuth 2.0)。
-//! 窓口が auth の `/introspect` に尋ね、いまの Discord のロールが Admin 以上かを、自分で確かめる (ここの判断は、見せるかどうかだけ)。
-//! 窓口の audit.jsonl には、トークンの持ち主が残る。Discord のトークンは、このサービスには無い
+//! コネクタ (crime-buster) には、共有の秘密を使わず、**呼び出した利用者の Bearer トークンをそのまま渡す** (OAuth 2.0)。
+//! コネクタが auth の `/introspect` に尋ね、いまの Discord のロールが Admin 以上かを、自分で確かめる (ここの判断は、見せるかどうかだけ)。
+//! コネクタの audit.jsonl には、トークンの持ち主が残る。Discord のトークンは、このサービスには無い
 //! (crime-buster が DiscordSRV の設定から読み、Discord-MCP に渡す)。
 
 use std::time::Duration;
@@ -38,7 +38,7 @@ pub fn is_admin_tool(name: &str) -> bool {
     TOOLS.contains(&name)
 }
 
-/// 窓口の応答の待ち時間。Muse のコネクターの 1 回の呼び出しは 45 秒で切れるので、それより短くする
+/// コネクタの応答の待ち時間。Muse のコネクターの 1 回の呼び出しは 45 秒で切れるので、それより短くする
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 enum Reply {
@@ -46,7 +46,7 @@ enum Reply {
     Png(Vec<u8>),
 }
 
-/// 事件の ID として安全か (窓口の URL にそのまま入れるので、区切りや .. を通さない)
+/// 事件の ID として安全か (コネクタの URL にそのまま入れるので、区切りや .. を通さない)
 fn valid_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 100
@@ -69,7 +69,7 @@ fn pretty(value: &Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
 
-/// 窓口に 1 回頼む。エラーは、窓口の `error` をそのまま利用者に見せられる文にして返す
+/// コネクタに 1 回頼む。エラーは、コネクタの `error` をそのまま利用者に見せられる文にして返す
 async fn ask(
     app: &App,
     who: &Caller<'_>,
@@ -79,7 +79,7 @@ async fn ask(
     timeout: Duration,
 ) -> Result<Reply, String> {
     let Some(base) = app.cfg.crime_buster_url.as_deref() else {
-        return Err("荒らし対策の窓口が設定されていません".into());
+        return Err("荒らし対策のコネクタが設定されていません".into());
     };
     let mut request = app
         .http
@@ -92,7 +92,7 @@ async fn ask(
     // 内部の URL は利用者に見せない。詳しくはログにだけ残す
     let res = request.send().await.map_err(|e| {
         eprintln!("crime-buster: {e}");
-        "荒らし対策の窓口につなげません".to_string()
+        "荒らし対策のコネクタにつなげません".to_string()
     })?;
     let status = res.status();
     let is_png = res
@@ -107,14 +107,16 @@ async fn ask(
             .map(|b| Reply::Png(b.to_vec()))
             .map_err(|e| {
                 eprintln!("crime-buster: {e}");
-                "荒らし対策の窓口から画像を受け取れません".to_string()
+                "荒らし対策のコネクタから画像を受け取れません".to_string()
             });
     }
     let body: Value = res.json().await.unwrap_or(Value::Null);
     if status.is_success() {
         return Ok(Reply::Json(body));
     }
-    let message = body["error"].as_str().unwrap_or("窓口がエラーを返しました");
+    let message = body["error"]
+        .as_str()
+        .unwrap_or("コネクタがエラーを返しました");
     Err(format!("{message} (HTTP {})", status.as_u16()))
 }
 
