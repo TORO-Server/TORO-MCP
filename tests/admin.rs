@@ -1,4 +1,4 @@
-//! 管理用のツール (荒らし対策と Discord): Admin 以上の人にだけ見え、窓口に取り次ぐ
+//! 管理用のツール (荒らし対策と Discord): Admin 以上の人にだけ見え、コネクタに取り次ぐ
 
 mod common;
 
@@ -34,7 +34,7 @@ async fn admin_tools_are_listed_only_for_admins() {
     assert!(names.contains(&"crime_buster_rollback".to_string()));
     assert!(names.contains(&"discord_call_tool".to_string()));
 
-    // 窓口が設定されていないときは、Admin にも出さない
+    // コネクタが設定されていないときは、Admin にも出さない
     let server = start_with(|cfg| cfg.crime_buster_url = None).await;
     let admin = server.admin_token();
     assert_eq!(tool_names(&server, Some(&admin)).await.len(), 7);
@@ -102,7 +102,7 @@ async fn oauth_tokens_need_the_mcp_scope_for_admin_tools() {
         }))
     };
 
-    // Admin の人でも、読むだけなどに同意したトークンでは、一覧に出ず、呼んでも窓口に届かない
+    // Admin の人でも、読むだけなどに同意したトークンでは、一覧に出ず、呼んでもコネクタに届かない
     for scope in ["read", "read write", "write", "", "mcpx"] {
         let token = token_with_scope(scope);
         assert_eq!(
@@ -163,7 +163,7 @@ async fn status_goes_to_the_crime_buster_with_the_callers_own_token() {
     assert_eq!(calls.len(), 1);
     assert_eq!(calls[0].method, "GET");
     assert_eq!(calls[0].target, "/v1/status");
-    // 共有の秘密ではなく、呼び出した利用者の Bearer トークンをそのまま渡す (窓口が auth に尋ねて、Admin かを確かめる)
+    // 共有の秘密ではなく、呼び出した利用者の Bearer トークンをそのまま渡す (コネクタが auth に尋ねて、Admin かを確かめる)
     assert_eq!(calls[0].authorization, format!("Bearer {admin}"));
 }
 
@@ -497,7 +497,7 @@ async fn crime_buster_errors_are_shown_as_text() {
         "{text}"
     );
 
-    // 窓口が落ちている
+    // コネクタが落ちている
     let server = start_with(|cfg| cfg.crime_buster_url = Some("http://127.0.0.1:9".into())).await;
     let admin = server.admin_token();
     let (text, is_error) = server
@@ -506,7 +506,7 @@ async fn crime_buster_errors_are_shown_as_text() {
     assert!(is_error);
     assert!(text.contains("つなげません"), "{text}");
 
-    // 窓口が、トークンを断る (MCP が Admin と見ても、窓口が auth に尋ねた結果が正しい)
+    // コネクタが、トークンを断る (MCP が Admin と見ても、コネクタが auth に尋ねた結果が正しい)
     let server = start().await;
     server.auth.register("tok-nobody", admin_claims());
     let (text, is_error) = server
