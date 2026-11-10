@@ -106,7 +106,7 @@ cargo test
 | --- | --- | --- |
 | `AUTH_INTERNAL_URL` | `http://toro-auth:8081` | トークンの確認を頼む先 |
 | `API_INTERNAL_URL` | `http://toro-api:8080` | Wiki と稼働状態のデータを頼む先 |
-| `CRIMEBUSTER_CONNECTOR_URL` | (空) | 荒らし対策のコネクタ (内部のネットワークだけ。例 `http://crime-buster:8090`)。空なら、管理用のツールは出さない。旧名の `CRIMEBUSTER_CONTROL_URL` も受理する (新名が優先) |
+| `CRIMEBUSTER_CONNECTOR_URL` | (空) | 荒らし対策のコネクタ (内部のネットワークだけ。例 `http://crime-buster:8090`)。空なら、管理用のツールは出さない |
 | `ADMIN_ROLE_IDS` | Owner と Admin のロール ID | 管理用のツールを使える Discord のロール (カンマ区切り) |
 | `PUBLIC_AUTH_URL` / `PUBLIC_API_URL` / `PUBLIC_MCP_URL` / `PUBLIC_WIKI_URL` | 本番の URL | 利用者に見せる URL |
 | `CORS_ORIGINS` | `https://wiki.torosaba.net` | Cookie 付きで呼べる Origin (カンマ区切り) |
