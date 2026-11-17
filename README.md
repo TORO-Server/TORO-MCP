@@ -1,10 +1,10 @@
 # toro-mcp
 
-TORO Server の AI コネクタ (AI クライアントがつなぐ Remote MCP サーバー) です。Rust で書かれています。
+TORO Server の AI コネクタ (AI クライアント (AI を使うアプリ) がつなぐ Remote MCP (AI がネット越しに道具を使うための取り決め) サーバー) です。Rust で書かれています。
 
 利用者がつないだ AI に、Wiki の原稿の読み書き、Minecraft サーバーの稼働状態、利用者の権限の確認といった道具 (ツール) を渡します。Admin 以上の人には、荒らし対策と Discord の道具も出します。
 
-このサービスは画面を持たず、秘密も持ちません。トークンの確認は [TORO-Auth](https://github.com/TORO-Server/TORO-Auth) に、Wiki と稼働状態のデータは [TORO-API](https://github.com/TORO-Server/TORO-API) に頼みます。
+このサービスは画面を持たず、秘密も持ちません。トークン (本人確認済みの印になる文字列) の確認は [TORO-Auth](https://github.com/TORO-Server/TORO-Auth) に、Wiki と稼働状態のデータは [TORO-API](https://github.com/TORO-Server/TORO-API) に頼みます。
 
 ## 動かしてみる
 
