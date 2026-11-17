@@ -26,7 +26,7 @@
   },
   {
     "name": "crime_buster_get_image",
-    "description": "事件の証拠の画像 (BlueMap の画面) を取得します。damage.png は被害の全体 (赤い線 = 壊された列、黄色の枠 = 範囲)、closeup.png はいちばん壊された所、restored.png はロールバック後です。荒らしか正当な作業かを、画像で確かめるために使います。Admin 以上のみ。",
+    "description": "事件の証拠の画像 (TORO-Renderer が描いた 3D の画面) を取得します。damage.png は被害の全体 (赤い線 = 壊された列、黄色の枠 = 範囲)、closeup.png はいちばん壊された所、restored.png はロールバック後です。荒らしか正当な作業かを、画像で確かめるために使います。Admin 以上のみ。",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -118,7 +118,7 @@
   },
   {
     "name": "crime_buster_map_screenshot",
-    "description": "BlueMap の 3D 地図の、指定した場所の撮影を始めます (撮れるまで 1 分ほどかかるので、job の番号をすぐ返します)。1 分ほど待ってから、crime_buster_get_screenshot にその job を渡して画像を取ってください。地図の更新は最大 5 分遅れます。荒らされた場所の周りを見るために使います。Admin 以上のみ。",
+    "description": "TORO-Renderer で、指定した場所の 3D の画面の撮影を始めます (撮れるまで 1 分ほどかかるので、job の番号をすぐ返します)。1 分ほど待ってから、crime_buster_get_screenshot にその job を渡して画像を取ってください。荒らされた場所の周りを見るために使います。Admin 以上のみ。",
     "inputSchema": {
       "type": "object",
       "properties": {
