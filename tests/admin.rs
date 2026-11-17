@@ -297,7 +297,7 @@ async fn activity_and_chat_are_marked_untrusted() {
     let (text, is_error) = server
         .tool(
             "crime_buster_player_activity",
-            json!({ "player": "fuuty119", "hours": 12 }),
+            json!({ "player": "testuser", "hours": 12 }),
             Some(&admin),
         )
         .await;
@@ -312,7 +312,7 @@ async fn activity_and_chat_are_marked_untrusted() {
             .last()
             .unwrap()
             .target,
-        "/v1/players/fuuty119/activity?hours=12"
+        "/v1/players/testuser/activity?hours=12"
     );
     let (text, _) = server
         .tool(
