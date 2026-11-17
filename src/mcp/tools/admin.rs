@@ -345,14 +345,14 @@ mod tests {
 
     #[test]
     fn ids_and_names_are_checked_before_they_reach_a_url() {
-        assert!(valid_id("20261104-101500-fuuty119"));
+        assert!(valid_id("20261104-101500-testuser"));
         assert!(valid_id("chat-20261104-a.b_c"));
         for bad in [
             "", "../x", "a/b", "a\\b", "a b", "a..b", "a?x=1", "a%2F", "あ",
         ] {
             assert!(!valid_id(bad), "{bad:?}");
         }
-        assert!(valid_player("fuuty119"));
+        assert!(valid_player("testuser"));
         assert!(valid_player(".Steve_1"));
         for bad in ["", "a b", "a;op", "a\nb", "x".repeat(33).as_str(), "あ"] {
             assert!(!valid_player(bad), "{bad:?}");
