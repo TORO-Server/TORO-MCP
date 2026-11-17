@@ -9,7 +9,7 @@
 | `POST /` | JSON-RPC 2.0 (`initialize`、`tools/list`、`tools/call`、`ping` ほか)。通知には 202 |
 | `GET /` | 発見用の JSON (ツールの一覧と、呼び出し元)。`Accept: text/event-stream` と `DELETE /` は 405 (サーバーから送り始めるものも、セッションも持たない) |
 | `GET /` (ブラウザ) | Wiki の「AIクライアントの接続方法」へ 302。JSON を求める要求は除く |
-| `/.well-known/oauth-protected-resource` | RFC 9728 の保護リソースのメタデータ。認可サーバーは TORO-Auth |
+| `/.well-known/oauth-protected-resource` | RFC 9728 の保護リソースの付随する情報。認可サーバーは TORO-Auth |
 | `GET /healthz` | 稼働確認 |
 
 認証は Bearer だけです。Cookie は見ません。
@@ -44,7 +44,7 @@
 | 振り分けと共通の上限 | `src/routes.rs` | `tests/hosts.rs`、`tests/security.rs` |
 | MCP の受け口 | `src/mcp/transport.rs` | `tests/mcp.rs` |
 | ツール | `src/mcp/tools/` | `tests/mcp.rs` |
-| 保護リソースのメタデータ | `src/mcp/metadata.rs` | `tests/hosts.rs` |
+| 保護リソースの付随する情報 | `src/mcp/metadata.rs` | `tests/hosts.rs` |
 | トークンの確認 (auth の `/introspect`) | `src/identity.rs` | `tests/security.rs` |
 | api への問い合わせ | `src/api.rs` | `tests/mcp.rs` |
 | 設定、URL | `src/config.rs`、`src/site.rs` | `tests/hosts.rs` |
