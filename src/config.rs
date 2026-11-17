@@ -57,6 +57,10 @@ impl Config {
     }
 
     pub fn from_env() -> Result<Self, String> {
+        let auth_internal_url = optional("AUTH_INTERNAL_URL")
+            .ok_or_else(|| "missing environment variables: AUTH_INTERNAL_URL".to_string())?
+            .trim_end_matches('/')
+            .to_string();
         Ok(Self {
             port: or_default("PORT", "8080")
                 .parse()
@@ -70,7 +74,7 @@ impl Config {
                 .map(|origin| origin.trim().to_string())
                 .filter(|origin| !origin.is_empty())
                 .collect(),
-            auth_internal_url: trimmed("AUTH_INTERNAL_URL", "http://toro-auth:8081"),
+            auth_internal_url,
             api_internal_url: trimmed("API_INTERNAL_URL", "http://toro-api:8080"),
             crime_buster_url: connector_url_from(|name| std::env::var(name).ok())
                 .map(|url| url.trim_end_matches('/').to_string()),
