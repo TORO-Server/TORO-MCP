@@ -117,13 +117,16 @@ pub async fn identify(app: &App, ctx: &Ctx) -> Identity {
 
 async fn introspect(app: &App, token: &str) -> Identity {
     let url = format!("{}/introspect", app.cfg.auth_internal_url);
-    let response = app
+    let mut request = app
         .http
         .post(url)
         .timeout(INTROSPECT_TIMEOUT)
-        .json(&json!({ "token": token }))
-        .send()
-        .await;
+        .json(&json!({ "token": token }));
+    // auth が共有秘密を求めるとき (INTROSPECT_SECRET) の呼び出し側の証明
+    if let Some(secret) = &app.cfg.auth_introspect_secret {
+        request = request.header("X-Toro-Token", secret);
+    }
+    let response = request.send().await;
     let body: Value = match response {
         Ok(res) if res.status().is_success() => match res.json().await {
             Ok(body) => body,
