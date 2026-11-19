@@ -238,7 +238,7 @@ async fn start_fake_api(state: Arc<FakeApi>) -> String {
     spawn(router).await
 }
 
-pub const ADMIN_ROLE: &str = "497387545928138762";
+pub const ADMIN_ROLE: &str = "900000000000000001";
 pub const PNG_BYTES: &[u8] = b"\x89PNG\r\n\x1a\nfake";
 
 /// crime-buster のコネクタに届いた依頼

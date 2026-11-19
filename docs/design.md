@@ -27,7 +27,7 @@
 
 ### 管理用のツール (Admin 以上だけ)
 
-荒らし対策 (CrimeBuster) と Discord のツールです。ツールの一覧と説明の正本は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs` です。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`CRIMEBUSTER_CONNECTOR_URL` が無いときは、Admin にも出しません。
+荒らし対策 (CrimeBuster) と Discord のツールです。ツールの一覧と説明の正本は `assets/mcp/tools_admin.json`、実行は `src/mcp/tools/admin.rs` です。**いまの Discord のロールが `ADMIN_ROLE_IDS` のどれかで、トークンの scope に `mcp` がある (または scope の無い、本人が発行したトークンの) 人にだけ** `tools/list` に出て、呼ばれても、ここで断ります。`CRIMEBUSTER_CONNECTOR_URL` が無いとき、または `ADMIN_ROLE_IDS` が未設定か空のときは、Admin にも出しません (`ADMIN_ROLE_IDS` に既定の値は無く、起動は続けて匿名と Wiki のツールだけが使えます)。
 
 
 - **ロールは、auth の確認の結果 (`roles_source` が `live`) だけを信じる。** auth は `/introspect` のたびに、トークンの値ではなく、いまの Discord のロールを返す (60 秒だけ覚える)。OAuth のアクセストークン (ロールが空) も 90 日トークン (ロールが古くなる) も、同じに扱え、ロールを外せば、最長 60 秒で使えなくなる。auth がロールを確かめられていないとき (`token` / `unavailable`、または古い auth) は、Admin と認めない。

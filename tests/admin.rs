@@ -58,6 +58,25 @@ async fn admin_tools_are_listed_only_for_admins() {
 }
 
 #[tokio::test]
+async fn admin_tools_are_off_when_no_admin_role_is_configured() {
+    // ADMIN_ROLE_IDS が未設定か空 (admin_roles が空) のときは、Admin のロールを持つ人にも、管理用のツールを出さず、呼ばれても断る
+    let server = start_with(|cfg| cfg.admin_roles = Vec::new()).await;
+    let admin = server.admin_token();
+    let names = tool_names(&server, Some(&admin)).await;
+    assert_eq!(names.len(), 7);
+    assert!(!names.contains(&"crime_buster_rollback".to_string()));
+    let (text, is_error) = server
+        .tool(
+            "crime_buster_rollback",
+            json!({ "id": "a1", "player": "x" }),
+            Some(&admin),
+        )
+        .await;
+    assert!(is_error, "{text}");
+    assert!(server.crime_buster.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn non_admins_are_refused_and_nothing_reaches_the_crime_buster() {
     let server = start().await;
     let editor = server.editor_token();
