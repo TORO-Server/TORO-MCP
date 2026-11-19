@@ -16,6 +16,8 @@ pub struct Config {
 
     /// トークンの確認を頼む先 (auth の内部の窓口。末尾の / なし)
     pub auth_internal_url: String,
+    /// auth の `/introspect` へ付ける共有秘密 (`X-Toro-Token`)。auth が `INTROSPECT_SECRET` を設定したときに要る。無ければ付けない
+    pub auth_introspect_secret: Option<String>,
     /// Wiki と稼働状態のデータを頼む先 (api。末尾の / なし)
     pub api_internal_url: String,
 
@@ -83,6 +85,7 @@ impl Config {
                 .filter(|origin| !origin.is_empty())
                 .collect(),
             auth_internal_url,
+            auth_introspect_secret: optional("AUTH_INTROSPECT_SECRET"),
             api_internal_url: trimmed("API_INTERNAL_URL", "http://toro-api:8080"),
             crime_buster_url: connector_url_from(|name| std::env::var(name).ok())
                 .map(|url| url.trim_end_matches('/').to_string()),

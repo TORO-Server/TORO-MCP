@@ -41,6 +41,8 @@ pub struct FakeAuth {
     /// true の間は、何を聞かれても 500 を返す
     pub broken: AtomicBool,
     pub requests: AtomicUsize,
+    /// 各リクエストの `X-Toro-Token` (無ければ None)
+    pub secrets: Mutex<Vec<Option<String>>>,
 }
 
 impl FakeAuth {
@@ -63,6 +65,13 @@ async fn start_fake_auth(state: Arc<FakeAuth>) -> String {
             let (parts, body) = req.into_parts();
             let body = to_bytes(body, usize::MAX).await.unwrap();
             state.requests.fetch_add(1, Ordering::SeqCst);
+            state.secrets.lock().unwrap().push(
+                parts
+                    .headers
+                    .get("x-toro-token")
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_string),
+            );
             if parts.method != Method::POST || parts.uri.path() != "/introspect" {
                 return json_response(404, json!({ "error": "not found" }));
             }
@@ -366,6 +375,7 @@ pub async fn start_with(customize: impl FnOnce(&mut Config)) -> TestServer {
         wiki_url: WIKI_ORIGIN.into(),
         cors_origins: vec![WIKI_ORIGIN.into()],
         auth_internal_url: start_fake_auth(auth.clone()).await,
+        auth_introspect_secret: None,
         api_internal_url: start_fake_api(api.clone()).await,
         crime_buster_url: Some(start_fake_crime_buster(crime_buster.clone()).await),
         admin_roles: vec![ADMIN_ROLE.into()],
