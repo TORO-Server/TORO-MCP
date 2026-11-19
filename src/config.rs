@@ -1,8 +1,5 @@
 //! 環境変数からの設定。秘密は無く、既定は本番の値にしてある (荒らし対策のコネクタ `CRIMEBUSTER_CONNECTOR_URL` だけは、使うときに指定する)
 
-/// 管理用のツールを使える Discord のロール (TORO サーバーの Owner と Admin)
-const DEFAULT_ADMIN_ROLES: &str = "338718477332512769,497387545928138762";
-
 #[derive(Clone)]
 pub struct Config {
     pub port: u16,
@@ -50,6 +47,17 @@ fn connector_url_from(get: impl Fn(&str) -> Option<String>) -> Option<String> {
     get("CRIMEBUSTER_CONNECTOR_URL").filter(|value| !value.is_empty())
 }
 
+/// 管理用のツールを使える Discord のロールの ID を決める。`ADMIN_ROLE_IDS` (カンマ区切り) を読む。
+/// 既定の値は持たない。未設定か空なら空の一覧になり、管理用のツールは誰にも出さない (起動は続け、匿名と Wiki のツールだけが使える)
+fn admin_roles_from(get: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    get("ADMIN_ROLE_IDS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|role| role.trim().to_string())
+        .filter(|role| !role.is_empty())
+        .collect()
+}
+
 impl Config {
     /// Cookie 付きのリクエストを受けてよい送り元か (auth と、指定の Origin)
     pub fn is_trusted_origin(&self, origin: &str) -> bool {
@@ -78,11 +86,7 @@ impl Config {
             api_internal_url: trimmed("API_INTERNAL_URL", "http://toro-api:8080"),
             crime_buster_url: connector_url_from(|name| std::env::var(name).ok())
                 .map(|url| url.trim_end_matches('/').to_string()),
-            admin_roles: or_default("ADMIN_ROLE_IDS", DEFAULT_ADMIN_ROLES)
-                .split(',')
-                .map(|role| role.trim().to_string())
-                .filter(|role| !role.is_empty())
-                .collect(),
+            admin_roles: admin_roles_from(|name| std::env::var(name).ok()),
             body_read_timeout_secs: 30,
         })
     }
@@ -90,12 +94,25 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
-    use super::connector_url_from;
+    use super::{admin_roles_from, connector_url_from};
     use std::collections::HashMap;
 
     fn env_of(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
         let values: HashMap<&str, &str> = pairs.iter().copied().collect();
         move |name| values.get(name).map(|value| (*value).to_string())
+    }
+
+    #[test]
+    fn admin_roles_are_empty_when_not_set_or_blank() {
+        assert!(admin_roles_from(env_of(&[])).is_empty());
+        assert!(admin_roles_from(env_of(&[("ADMIN_ROLE_IDS", "")])).is_empty());
+        assert!(admin_roles_from(env_of(&[("ADMIN_ROLE_IDS", " , ,")])).is_empty());
+    }
+
+    #[test]
+    fn admin_roles_are_split_and_trimmed() {
+        let roles = admin_roles_from(env_of(&[("ADMIN_ROLE_IDS", "1, 2 ,,3")]));
+        assert_eq!(roles, vec!["1", "2", "3"]);
     }
 
     #[test]
