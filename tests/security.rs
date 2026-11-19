@@ -312,3 +312,34 @@ async fn large_bodies_are_refused() {
         .unwrap();
     assert_eq!(res.status(), 413);
 }
+
+#[tokio::test]
+async fn the_shared_secret_goes_to_auth_only_when_configured() {
+    // 設定が無いときは、ヘッダーを付けない (auth が秘密を求めない間の、これまでの動き)
+    let server = start().await;
+    let token = server.editor_token();
+    assert_eq!(
+        server
+            .rpc("tools/list", json!({}), Some(&token))
+            .await
+            .status(),
+        200
+    );
+    assert_eq!(*server.auth.secrets.lock().unwrap(), vec![None::<String>]);
+
+    // 設定したときは、auth への確認のたびに同じ値を付ける
+    let server =
+        start_with(|cfg| cfg.auth_introspect_secret = Some("shared-secret-value".into())).await;
+    let token = server.editor_token();
+    assert_eq!(
+        server
+            .rpc("tools/list", json!({}), Some(&token))
+            .await
+            .status(),
+        200
+    );
+    assert_eq!(
+        *server.auth.secrets.lock().unwrap(),
+        vec![Some("shared-secret-value".to_string())]
+    );
+}
